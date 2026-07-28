@@ -7,11 +7,13 @@
  *   const dashboard = await api.student.dashboard();
  *   await api.auth.signIn({ identifier, password });
  *
- * Authentication currently uses the existing NextAuth cookie session. React
- * Native's native fetch implementation retains cookies when
- * `credentials: "include"` is used. Do not store passwords or session cookies
- * manually in AsyncStorage/SecureStore.
+ * Authentication uses the existing NextAuth cookie session. Native fetch cookie
+ * persistence varies between Expo Go/platform versions, so native responses are
+ * also mirrored into a memory-only cookie jar. Nothing is written to
+ * AsyncStorage and passwords are never retained.
  */
+
+import { Platform } from "react-native";
 
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL;
 
@@ -21,6 +23,51 @@ export const API_BASE_URL = String(configuredBaseUrl || "")
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const unauthorizedListeners = new Set();
+const nativeCookies = new Map();
+
+function isNativeRuntime() {
+  return Platform.OS !== "web";
+}
+
+function splitSetCookieHeader(value) {
+  if (!value) return [];
+
+  // A comma inside an Expires attribute is not a cookie separator. Auth.js may
+  // return several Set-Cookie values as one combined header in React Native.
+  return String(value).split(/,(?=\s*[^;,=\s]+=[^;,]*)/g);
+}
+
+function rememberResponseCookies(response) {
+  if (!isNativeRuntime()) return;
+
+  const getSetCookie = response.headers?.getSetCookie;
+  const values =
+    typeof getSetCookie === "function"
+      ? getSetCookie.call(response.headers)
+      : splitSetCookieHeader(response.headers?.get?.("set-cookie"));
+
+  for (const value of values || []) {
+    const pair = String(value).split(";", 1)[0];
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+
+    const name = pair.slice(0, separator).trim();
+    const cookieValue = pair.slice(separator + 1).trim();
+    if (!cookieValue) nativeCookies.delete(name);
+    else nativeCookies.set(name, cookieValue);
+  }
+}
+
+function nativeCookieHeader() {
+  if (!isNativeRuntime() || nativeCookies.size === 0) return "";
+  return [...nativeCookies.entries()]
+    .map(([name, value]) => `${name}=${value}`)
+    .join("; ");
+}
+
+function clearNativeCookies() {
+  nativeCookies.clear();
+}
 
 export class ApiError extends Error {
   constructor(message, options = {}) {
@@ -164,6 +211,8 @@ export async function request(path, options = {}) {
     Accept: "application/json",
     ...suppliedHeaders,
   };
+  const cookie = nativeCookieHeader();
+  if (cookie && !headers.Cookie) headers.Cookie = cookie;
 
   let requestBody;
   if (body !== undefined && body !== null) {
@@ -183,6 +232,7 @@ export async function request(path, options = {}) {
       credentials: "include",
       signal: controller.signal,
     });
+    rememberResponseCookies(response);
     const data = await parseResponse(response, responseType);
 
     if (!response.ok) {
@@ -302,9 +352,13 @@ export const authApi = {
       .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
       .join("&");
 
-    return post("/api/auth/signout", form, {
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    });
+    try {
+      return await post("/api/auth/signout", form, {
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      });
+    } finally {
+      clearNativeCookies();
+    }
   },
 };
 

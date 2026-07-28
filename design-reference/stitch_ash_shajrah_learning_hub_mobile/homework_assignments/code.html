@@ -1,0 +1,276 @@
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&amp;family=Quicksand:wght@500;600;700&amp;display=swap" rel="stylesheet"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface-dim": "#dcdad3", "on-background": "#1c1c18", "error": "#ba1a1a", "secondary-fixed-dim": "#ecc246", "on-primary-container": "#78aa99", "on-tertiary-fixed": "#002116", "on-tertiary-container": "#58b18e", "tertiary-container": "#00402d", "on-tertiary": "#ffffff", "surface": "#fcf9f2", "inverse-primary": "#9dd1bf", "on-error-container": "#93000a", "outline": "#707975", "on-secondary": "#ffffff", "on-tertiary-fixed-variant": "#00513b", "surface-container-lowest": "#ffffff", "surface-container": "#f0eee7", "on-surface": "#1c1c18", "error-container": "#ffdad6", "surface-variant": "#e5e2db", "tertiary-fixed-dim": "#7fd8b3", "primary": "#00271e", "on-secondary-fixed": "#241a00", "on-surface-variant": "#404945", "secondary": "#755b00", "primary-container": "#063f32", "on-primary-fixed-variant": "#1c4f41", "surface-container-low": "#f6f3ec", "on-secondary-container": "#735a00", "inverse-surface": "#31312c", "secondary-container": "#fed255", "surface-bright": "#fcf9f2", "background": "#fcf9f2", "surface-tint": "#366758", "tertiary": "#00281b", "on-primary-fixed": "#002018", "primary-fixed": "#b9eedb", "primary-fixed-dim": "#9dd1bf", "on-secondary-fixed-variant": "#584400", "surface-container-highest": "#e5e2db", "surface-container-high": "#ebe8e1", "on-error": "#ffffff", "inverse-on-surface": "#f3f0ea", "secondary-fixed": "#ffe08e", "outline-variant": "#c0c9c4", "tertiary-fixed": "#9af4ce", "on-primary": "#ffffff" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "stack-lg": "32px", "stack-md": "16px", "container-padding-mobile": "20px", "base": "4px", "stack-sm": "8px", "gutter": "16px", "container-padding-desktop": "40px" }, "fontFamily": { "label-md": ["Quicksand"], "label-sm": ["Quicksand"], "body-lg": ["Quicksand"], "display-lg-mobile": ["Playfair Display"], "headline-md": ["Playfair Display"], "title-lg": ["Quicksand"], "body-md": ["Quicksand"], "display-lg": ["Playfair Display"] } } } }</script><style>@layer base { .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); } .pt-safe { padding-top: env(safe-area-inset-top, 0); } body { overscroll-behavior-y: none; } }</style></head><body class="bg-background text-on-surface font-body-md"><header class="fixed top-0 w-full z-50 bg-surface/80 backdrop-blur-xl pt-safe shadow-[0_1px_8px_rgba(6,63,50,0.04)]"><div class="h-16 px-container-padding-mobile flex items-center justify-between"><div class="flex items-center gap-3"><img alt="ALH Brand Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpgrmt1S_UVFKvn9l9jv5JFXD7Nx-0vyeYYeLI-gL_EPDLG5Y3kni5i38VXTee3KYkcX-DKtd-8XLkbqkpLKK-qnSFJF6m0_JGICF-mdtxmAAeiTvhK7Nh3di50D5GoPu6PIMbdfKV3aAtSiu3pY96jVGd2kEvoUml-IMkqtJcj6Sl8RddT8TI6Mdpxp5_e_F_H_iPN7cu-HUALAHwCxArzKZempMj8yPvAXKfvuwRyBnp0VrIpsiW"/><h1 class="font-headline-md text-headline-md text-primary truncate max-w-[180px]">Student Homework</h1></div><img alt="Profile" class="w-9 h-9 rounded-full object-cover ring-2 ring-secondary-container" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCXklregUyYD_9dgAoSJMPU4L54osBDTh_K3qmai5VS2e41MWxUjvtmO-aBszfKA8lnmqyMO6Au2tgLKaJHvawvpxI0dA9vnvbjMOtWUQORQv5SL6uKcsy2u9qiC51ZEa7Q25DkxxtqlIXnSP6G9tI00sjRu7LKtqgf2nKLTOWuSzkyxJGyM2wABcVSiOAZw8Q-3wrWBRgBUvz3KrfJooPBCJZmpiZEDx9-I6ZgZScb40pqsv80HALf"/></div></header><main class="pt-16 min-h-screen bg-background"><div class="flex flex-col w-full px-container-padding-mobile pb-stack-lg gap-stack-md">
+<!-- Tabs Navigation -->
+<div class="sticky top-16 z-30 bg-background/95 backdrop-blur-md -mx-container-padding-mobile px-container-padding-mobile py-4 mb-2">
+<div class="flex items-center gap-2 overflow-x-auto no-scrollbar">
+<button class="hw-tab active px-6 py-2 rounded-full font-label-md text-label-md transition-all duration-300 bg-secondary-container text-on-secondary-container shadow-sm whitespace-nowrap" onclick="filterHomework('all')">
+        All
+      </button>
+<button class="hw-tab px-6 py-2 rounded-full font-label-md text-label-md transition-all duration-300 bg-surface-container text-on-surface-variant hover:bg-surface-variant whitespace-nowrap" onclick="filterHomework('pending')">
+        Pending
+      </button>
+<button class="hw-tab px-6 py-2 rounded-full font-label-md text-label-md transition-all duration-300 bg-surface-container text-on-surface-variant hover:bg-surface-variant whitespace-nowrap" onclick="filterHomework('submitted')">
+        Submitted
+      </button>
+<button class="hw-tab px-6 py-2 rounded-full font-label-md text-label-md transition-all duration-300 bg-surface-container text-on-surface-variant hover:bg-surface-variant whitespace-nowrap" onclick="filterHomework('approved')">
+        Approved
+      </button>
+</div>
+</div>
+<!-- Homework Grid -->
+<div class="grid grid-cols-1 gap-gutter" id="homework-list">
+<!-- Card 1: Pending -->
+<div class="hw-card group relative bg-surface-container-low rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(6,63,50,0.04)] transition-all duration-500 hover:shadow-xl active:scale-[0.98]" data-status="pending">
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-secondary"></div>
+<div class="p-5 flex flex-col gap-3">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-secondary uppercase tracking-wider">Advanced Mathematics</span>
+<h3 class="font-title-lg text-title-lg text-on-surface mt-1">Calculus: Integrals of Motion</h3>
+</div>
+<span class="px-3 py-1 bg-secondary-fixed text-on-secondary-fixed rounded-full font-label-sm text-label-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">schedule</span> Pending
+          </span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+<span class="font-label-md text-label-md">Due Oct 24, 2023</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">attachment</span>
+<span class="font-label-md text-label-md">2 Resources</span>
+</div>
+</div>
+<button class="mt-2 w-full py-3 bg-primary text-on-primary rounded-full font-label-md text-label-md flex items-center justify-center gap-2 group-hover:bg-primary-container transition-colors" onclick="openDetail('hw-1')">
+          View Details
+          <span class="material-symbols-outlined text-[18px] group-hover:translate-x-1 transition-transform">arrow_forward</span>
+</button>
+</div>
+</div>
+<!-- Card 2: Approved -->
+<div class="hw-card group relative bg-surface-container-low rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(6,63,50,0.04)] transition-all duration-500" data-status="approved">
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-on-primary-container"></div>
+<div class="p-5 flex flex-col gap-3">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-on-primary-container uppercase tracking-wider">Arabic Literature</span>
+<h3 class="font-title-lg text-title-lg text-on-surface mt-1">Analysis of Classical Poetry</h3>
+</div>
+<span class="px-3 py-1 bg-tertiary-fixed text-on-tertiary-fixed rounded-full font-label-sm text-label-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">check_circle</span> Approved
+          </span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<div class="flex items-center gap-1.5 text-on-primary-container">
+<span class="material-symbols-outlined text-[18px]">stars</span>
+<span class="font-label-md text-label-md font-bold">Grade: A+</span>
+</div>
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">history</span>
+<span class="font-label-md text-label-md">Closed Oct 12</span>
+</div>
+</div>
+<button class="mt-2 w-full py-3 bg-surface-container-highest text-on-surface rounded-full font-label-md text-label-md flex items-center justify-center gap-2" onclick="openDetail('hw-2')">
+          View Submission
+        </button>
+</div>
+</div>
+<!-- Card 3: Submitted -->
+<div class="hw-card group relative bg-surface-container-low rounded-xl overflow-hidden shadow-[0_4px_20px_rgba(6,63,50,0.04)] transition-all duration-500" data-status="submitted">
+<div class="absolute left-0 top-0 bottom-0 w-1.5 bg-outline"></div>
+<div class="p-5 flex flex-col gap-3">
+<div class="flex justify-between items-start">
+<div class="flex flex-col">
+<span class="font-label-sm text-label-sm text-outline uppercase tracking-wider">Physical Sciences</span>
+<h3 class="font-title-lg text-title-lg text-on-surface mt-1">Kinematics Lab Report</h3>
+</div>
+<span class="px-3 py-1 bg-surface-variant text-on-surface-variant rounded-full font-label-sm text-label-sm flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">hourglass_empty</span> Submitted
+          </span>
+</div>
+<div class="flex items-center gap-4 text-on-surface-variant">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[18px]">event_available</span>
+<span class="font-label-md text-label-md">Sent Oct 18</span>
+</div>
+</div>
+<button class="mt-2 w-full py-3 bg-surface-container-highest text-on-surface rounded-full font-label-md text-label-md flex items-center justify-center gap-2" onclick="openDetail('hw-3')">
+          Review Status
+        </button>
+</div>
+</div>
+</div>
+<!-- Empty State (Hidden by default) -->
+<div class="hidden flex flex-col items-center justify-center py-20 text-center" id="empty-state">
+<div class="w-32 h-32 mb-6 opacity-40">
+<svg class="w-full h-full text-primary" viewbox="0 0 100 100">
+<path d="M20 30 Q50 10 80 30 Q80 70 50 90 Q20 70 20 30" fill="none" stroke="currentColor" stroke-width="2"></path>
+<circle cx="50" cy="45" fill="currentColor" opacity="0.2" r="15"></circle>
+<path d="M40 45 L48 53 L60 37" fill="none" stroke="currentColor" stroke-width="3"></path>
+</svg>
+</div>
+<h4 class="font-headline-md text-headline-md text-on-surface">All caught up!</h4>
+<p class="font-body-md text-body-md text-on-surface-variant max-w-[240px] mt-2">No homework found in this category. Take a moment to breathe.</p>
+</div>
+</div>
+<!-- Detail Bottom Sheet (Hidden) -->
+<div class="fixed inset-0 z-[60] invisible" id="detail-sheet">
+<div class="absolute inset-0 bg-primary/20 backdrop-blur-sm opacity-0 transition-opacity duration-300" id="sheet-overlay"></div>
+<div class="absolute bottom-0 left-0 right-0 bg-surface rounded-t-[28px] translate-y-full transition-transform duration-500 ease-out shadow-2xl max-h-[90vh] overflow-y-auto" id="sheet-content">
+<div class="flex flex-col items-center pt-3 pb-6">
+<div class="w-10 h-1 bg-outline-variant rounded-full mb-6"></div>
+<div class="px-container-padding-mobile w-full flex flex-col gap-stack-md">
+<div class="flex flex-col gap-1">
+<div class="font-label-sm text-label-sm text-secondary uppercase" id="detail-subject">Subject Name</div>
+<h2 class="font-headline-md text-headline-md text-primary" id="detail-title">Assignment Title</h2>
+</div>
+<div class="bg-surface-container-low p-5 rounded-xl flex flex-col gap-4">
+<h4 class="font-title-lg text-title-lg text-on-surface">Instructions</h4>
+<p class="font-body-md text-body-md text-on-surface-variant leading-relaxed" id="detail-instructions">
+                        Please provide a detailed analysis of the provided text. Focus on the use of metaphor and rhythm. Your submission should be at least 500 words and include references to the primary source.
+                    </p>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-title-lg text-title-lg text-on-surface">Resources</h4>
+<div class="flex gap-2">
+<div class="flex-1 bg-surface-container p-3 rounded-lg flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">picture_as_pdf</span>
+<span class="font-label-md text-label-md truncate text-on-surface">Reading_List.pdf</span>
+</div>
+<div class="flex-1 bg-surface-container p-3 rounded-lg flex items-center gap-3">
+<span class="material-symbols-outlined text-primary">description</span>
+<span class="font-label-md text-label-md truncate text-on-surface">Template.docx</span>
+</div>
+</div>
+</div>
+<div class="mt-4 pb-10" id="upload-section">
+<div class="w-full border-2 border-dashed border-outline-variant rounded-xl p-8 flex flex-col items-center justify-center gap-3 bg-surface-container-lowest transition-colors active:bg-secondary-container/10" id="drop-zone">
+<span class="material-symbols-outlined text-[48px] text-outline-variant">cloud_upload</span>
+<div class="text-center">
+<p class="font-title-lg text-title-lg text-on-surface">Upload Homework</p>
+<p class="font-label-sm text-label-sm text-on-surface-variant">PDF, DOCX up to 10MB</p>
+</div>
+<input class="hidden" id="file-input" type="file"/>
+<button class="mt-2 px-8 py-2.5 bg-primary text-on-primary rounded-full font-label-md text-label-md shadow-lg" onclick="document.getElementById('file-input').click()">
+                            Select File
+                        </button>
+</div>
+</div>
+<div class="hidden py-10 flex flex-col items-center text-center gap-4" id="success-message">
+<div class="w-20 h-20 bg-tertiary-container rounded-full flex items-center justify-center text-on-tertiary-container">
+<span class="material-symbols-outlined text-[40px]">check</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-primary">Submitted!</h3>
+<p class="font-body-md text-body-md text-on-surface-variant">Your work has been uploaded successfully.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<script>
+    function filterHomework(status) {
+        const cards = document.querySelectorAll('.hw-card');
+        const tabs = document.querySelectorAll('.hw-tab');
+        const emptyState = document.getElementById('empty-state');
+        const list = document.getElementById('homework-list');
+        
+        let visibleCount = 0;
+
+        tabs.forEach(tab => {
+            if (tab.innerText.toLowerCase() === status.toLowerCase()) {
+                tab.classList.add('bg-secondary-container', 'text-on-secondary-container', 'shadow-sm');
+                tab.classList.remove('bg-surface-container', 'text-on-surface-variant');
+            } else {
+                tab.classList.remove('bg-secondary-container', 'text-on-secondary-container', 'shadow-sm');
+                tab.classList.add('bg-surface-container', 'text-on-surface-variant');
+            }
+        });
+
+        cards.forEach(card => {
+            if (status === 'all' || card.dataset.status === status) {
+                card.style.display = 'block';
+                visibleCount++;
+            } else {
+                card.style.display = 'none';
+            }
+        });
+
+        if (visibleCount === 0) {
+            emptyState.classList.remove('hidden');
+            list.classList.add('hidden');
+        } else {
+            emptyState.classList.add('hidden');
+            list.classList.remove('hidden');
+        }
+    }
+
+    const sheet = document.getElementById('detail-sheet');
+    const sheetOverlay = document.getElementById('sheet-overlay');
+    const sheetContent = document.getElementById('sheet-content');
+
+    function openDetail(id) {
+        // Logic to update content based on ID would go here
+        const card = document.querySelector(`[onclick="openDetail('${id}')"]`).closest('.hw-card');
+        document.getElementById('detail-subject').innerText = card.querySelector('.font-label-sm').innerText;
+        document.getElementById('detail-title').innerText = card.querySelector('.font-title-lg').innerText;
+        
+        // Reset states
+        document.getElementById('upload-section').classList.remove('hidden');
+        document.getElementById('success-message').classList.add('hidden');
+
+        sheet.classList.remove('invisible');
+        setTimeout(() => {
+            sheetOverlay.classList.remove('opacity-0');
+            sheetContent.classList.remove('translate-y-full');
+        }, 10);
+    }
+
+    function closeDetail() {
+        sheetOverlay.classList.add('opacity-0');
+        sheetContent.classList.add('translate-y-full');
+        setTimeout(() => {
+            sheet.classList.add('invisible');
+        }, 500);
+    }
+
+    sheetOverlay.addEventListener('click', closeDetail);
+
+    // Mock File Upload
+    document.getElementById('file-input').addEventListener('change', function() {
+        if (this.files.length > 0) {
+            const uploadBtn = this.nextElementSibling;
+            uploadBtn.innerHTML = '<span class="material-symbols-outlined animate-spin">refresh</span> Uploading...';
+            
+            setTimeout(() => {
+                document.getElementById('upload-section').classList.add('hidden');
+                document.getElementById('success-message').classList.remove('hidden');
+                
+                // Add a little celebratory pulse
+                const circle = document.querySelector('#success-message div');
+                circle.classList.add('scale-125');
+                setTimeout(() => circle.classList.remove('scale-125'), 200);
+                
+                // Optional: close after delay
+                setTimeout(closeDetail, 2000);
+            }, 1500);
+        }
+    });
+
+    // Handle tactile feel for cards
+    document.querySelectorAll('.hw-card').forEach(card => {
+        card.addEventListener('touchstart', () => card.classList.add('scale-[0.98]'));
+        card.addEventListener('touchend', () => card.classList.remove('scale-[0.98]'));
+    });
+</script>
+<style>
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+</style></main><nav class="fixed bottom-0 w-full z-50 bg-surface/90 backdrop-blur-xl pb-safe shadow-[0_-1px_8px_rgba(6,63,50,0.04)]" data-active-classes="bg-secondary-container text-on-secondary-container rounded-full px-4 py-1"><div class="flex justify-between items-center h-16 px-4"><a class="flex flex-col items-center gap-0.5 text-on-surface-variant transition-colors" data-path="student-home" href="#"><span class="material-symbols-outlined">home</span><span class="font-label-sm text-label-sm">Home</span></a><a class="flex flex-col items-center gap-0.5 text-on-surface-variant transition-colors" data-path="student-classes" href="#"><span class="material-symbols-outlined">school</span><span class="font-label-sm text-label-sm">Classes</span></a><a class="flex flex-col items-center gap-0.5 text-on-surface-variant transition-colors" data-path="student-calendar" href="#"><span class="material-symbols-outlined">calendar_today</span><span class="font-label-sm text-label-sm">Calendar</span></a><a aria-current="page" class="flex flex-col items-center gap-0.5 transition-colors bg-secondary-container text-on-secondary-container rounded-full px-4 py-1" data-path="student-homework" href="#"><span class="material-symbols-outlined">menu_book</span><span class="font-label-sm text-label-sm">Homework</span></a><a class="flex flex-col items-center gap-0.5 text-on-surface-variant transition-colors" data-path="student-profile" href="#"><span class="material-symbols-outlined">person</span><span class="font-label-sm text-label-sm">Profile</span></a></div></nav></body></html>

@@ -3,6 +3,26 @@
  * Every hex here matches what the web app uses.
  */
 export const colors = {
+  // Stitch Material surface scale
+  surface: '#FCF9F2',
+  surfaceDim: '#DCDAD3',
+  surfaceBright: '#FCF9F2',
+  surfaceLowest: '#FFFFFF',
+  surfaceLow: '#F6F3EC',
+  surfaceContainer: '#F0EEE7',
+  surfaceHigh: '#EBE8E1',
+  surfaceHighest: '#E5E2DB',
+  onSurface: '#1C1C18',
+  onSurfaceVariant: '#404945',
+  outline: '#707975',
+  outlineVariant: '#C0C9C4',
+  background: '#FCF9F2',
+  primary: '#00271E',
+  primaryContainer: '#063F32',
+  onPrimary: '#FFFFFF',
+  error: '#BA1A1A',
+  errorContainer: '#FFDAD6',
+
   // ── Brand greens ─────────────────────────────────────
   emeraldDeep:  '#0D3B2E',   // sidebar gradient start, dark hero bg
   emeraldDark:  '#063F32',   // primary text, page foreground
@@ -15,6 +35,9 @@ export const colors = {
   goldLight:    '#E4C766',   // active nav item gradient end
   goldPale:     '#FFF5D6',   // active icon background, gold tint bg
   goldSoft:     '#E8D5A3',   // soft gold text backgrounds
+  secondary: '#755B00',
+  secondaryContainer: '#FED255',
+  onSecondaryContainer: '#735A00',
 
   // ── Cream / warm neutrals ─────────────────────────────
   cream:        '#FAF7F0',   // app background (--background)

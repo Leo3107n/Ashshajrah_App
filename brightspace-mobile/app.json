@@ -8,9 +8,9 @@
     "scheme": "brightspace",
     "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/logo.webp",
       "resizeMode": "contain",
-      "backgroundColor": "#FAF7F0"
+      "backgroundColor": "#FCF9F2"
     },
     "ios": {
       "supportsTablet": true,
@@ -19,7 +19,7 @@
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#FAF7F0"
+        "backgroundColor": "#FCF9F2"
       },
       "package": "com.healingcodes.brightspace"
     },

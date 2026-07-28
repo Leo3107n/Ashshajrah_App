@@ -72,12 +72,15 @@ export function AuthProvider({ children }) {
         return nextSession;
       })
       .catch((nextError) => {
-        if (!mountedRef.current) throw nextError;
+        if (!mountedRef.current) return null;
 
         setSession(null);
         setStatus("unauthenticated");
         if (!silent) setError(nextError);
-        throw nextError;
+        // Session restoration is a background operation. A temporarily
+        // unavailable backend should return the user to login, not surface an
+        // unhandled promise/LogBox error. Explicit login still throws normally.
+        return null;
       })
       .finally(() => {
         refreshPromiseRef.current = null;

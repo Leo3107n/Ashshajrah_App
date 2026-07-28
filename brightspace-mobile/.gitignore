@@ -10,4 +10,36 @@ npm-debug.*
 *.orig.*
 web-build/
 .env
-.env.local
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# Secrets and service credentials
+.secrets/
+secrets.local/
+credentials.local/
+credentials*.json
+service-account*.json
+*.pem
+*.pfx
+*.keystore
+
+# Private user data and database exports
+uploads/
+private-uploads/
+storage/private/
+*.dump
+*.backup
+*.bak
+*.sqlite
+*.sqlite3
+*.db
+
+# Local output
+coverage/
+logs/
+*.log
+.cache/
+tmp/
+temp/
