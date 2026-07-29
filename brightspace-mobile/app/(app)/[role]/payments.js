@@ -6,12 +6,14 @@ import {
   Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
 import api from "../../../src/api";
 import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 const FILTERS = [
@@ -39,6 +41,8 @@ function tone(status) {
 }
 
 export default function CoordinatorPayments() {
+  const { role } = useAuth();
+  const readOnly = role === "admin";
   const [filter, setFilter] = useState("all");
   const [data, setData] = useState({ counts: {}, items: [] });
   const [selected, setSelected] = useState(null);
@@ -97,7 +101,7 @@ export default function CoordinatorPayments() {
         refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
       >
         <View style={styles.intro}>
-          <View><AppText style={styles.eyebrow}>PAYMENT VERIFICATION</AppText><AppText variant="heading">Payment Queue</AppText></View>
+          <View><AppText style={styles.eyebrow}>{readOnly ? "PAYMENT OVERSIGHT" : "PAYMENT VERIFICATION"}</AppText><AppText variant="heading">Payment Queue</AppText></View>
           <View style={styles.count}><AppText style={styles.countText}>{data.items.length}</AppText></View>
         </View>
 
@@ -107,13 +111,17 @@ export default function CoordinatorPayments() {
           <Summary label="Rejected" toneName="danger" value={data.counts.rejected || 0} />
         </View>
 
-        <View style={styles.filters}>
-          {FILTERS.map(([value, label]) => (
-            <Pressable key={value} onPress={() => chooseFilter(value)} style={[styles.filter, filter === value ? styles.filterActive : null]}>
-              <AppText style={[styles.filterText, filter === value ? styles.filterTextActive : null]}>{label}</AppText>
-            </Pressable>
-          ))}
+        <View style={styles.filterFrame}>
+          <ScrollView alwaysBounceVertical={false} horizontal showsHorizontalScrollIndicator={false} style={styles.filterRail} contentContainerStyle={styles.filters}>
+            {FILTERS.map(([value, label]) => (
+              <Pressable key={value} onPress={() => chooseFilter(value)} style={[styles.filter, filter === value ? styles.filterActive : null]}>
+                <AppText style={[styles.filterText, filter === value ? styles.filterTextActive : null]}>{label}</AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
+
+        {readOnly ? <View style={styles.permission}><Ionicons color={colors.secondary} name="eye-outline" size={20} /><AppText style={styles.permissionText}>Admin oversight is read-only. Payment approval, rejection, fee settings, and payment methods are controlled by Coordinator or Super Admin.</AppText></View> : null}
 
         {error ? <SurfaceCard style={styles.error}><Ionicons color={colors.error} name="alert-circle-outline" size={22} /><AppText style={styles.errorText}>{error}</AppText><Pressable onPress={() => load()}><AppText style={styles.retry}>Retry</AppText></Pressable></SurfaceCard> : null}
 
@@ -122,7 +130,7 @@ export default function CoordinatorPayments() {
         </View>
       </Screen>
 
-      <PaymentDetail acting={acting} item={selected} onApprove={approve} onClose={() => !acting && setSelected(null)} onReject={(item, reason) => verify(item, "reject", reason)} />
+      <PaymentDetail acting={acting} item={selected} onApprove={approve} onClose={() => !acting && setSelected(null)} onReject={(item, reason) => verify(item, "reject", reason)} readOnly={readOnly} />
     </>
   );
 }
@@ -150,7 +158,7 @@ function DetailRow({ icon, label, value }) {
   return <View style={styles.detailRow}><Ionicons color={colors.secondary} name={icon} size={18} /><View style={styles.detailText}><AppText style={styles.detailLabel}>{label}</AppText><AppText style={styles.detailValue}>{value || "Not provided"}</AppText></View></View>;
 }
 
-function PaymentDetail({ acting, item, onApprove, onClose, onReject }) {
+function PaymentDetail({ acting, item, onApprove, onClose, onReject, readOnly }) {
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState("");
   useEffect(() => { setRejecting(false); setReason(""); }, [item?.id]);
@@ -189,9 +197,11 @@ function PaymentDetail({ acting, item, onApprove, onClose, onReject }) {
 
             {item.proof_file_url ? <PillButton icon={<Ionicons color={colors.secondary} name="document-attach-outline" size={18} />} onPress={() => Linking.openURL(item.proof_file_url)} style={styles.proof} variant="outline">View Payment Proof</PillButton> : <View style={styles.noProof}><Ionicons color={colors.outline} name="document-outline" size={20} /><AppText style={styles.noProofText}>No payment proof attached</AppText></View>}
 
-            {status === "pending" && !rejecting ? <View style={styles.actions}><PillButton icon={<Ionicons color={colors.white} name="checkmark-circle-outline" size={18} />} loading={acting} onPress={() => onApprove(item)}>Approve Payment</PillButton><Pressable disabled={acting} onPress={() => setRejecting(true)} style={styles.rejectButton}><Ionicons color={colors.error} name="close-circle-outline" size={18} /><AppText style={styles.rejectText}>Reject Payment</AppText></Pressable></View> : null}
+            {readOnly ? <View style={styles.locked}><Ionicons color={colors.secondary} name="lock-closed-outline" size={19} /><AppText style={styles.lockedText}>This payment can be reviewed but not approved, rejected, or modified by Admin.</AppText></View> : null}
 
-            {status === "pending" && rejecting ? <SurfaceCard elevated={false} style={styles.rejectPanel}><AppText style={styles.rejectTitle}>Rejection reason</AppText><TextInput multiline onChangeText={setReason} placeholder="Explain what needs to be corrected..." placeholderTextColor={colors.outline} style={styles.reasonInput} value={reason} /><PillButton loading={acting} onPress={submitRejection}>Confirm Rejection</PillButton><Pressable disabled={acting} onPress={() => setRejecting(false)} style={styles.cancelReject}><AppText style={styles.cancelText}>Cancel</AppText></Pressable></SurfaceCard> : null}
+            {!readOnly && status === "pending" && !rejecting ? <View style={styles.actions}><PillButton icon={<Ionicons color={colors.white} name="checkmark-circle-outline" size={18} />} loading={acting} onPress={() => onApprove(item)}>Approve Payment</PillButton><Pressable disabled={acting} onPress={() => setRejecting(true)} style={styles.rejectButton}><Ionicons color={colors.error} name="close-circle-outline" size={18} /><AppText style={styles.rejectText}>Reject Payment</AppText></Pressable></View> : null}
+
+            {!readOnly && status === "pending" && rejecting ? <SurfaceCard elevated={false} style={styles.rejectPanel}><AppText style={styles.rejectTitle}>Rejection reason</AppText><TextInput multiline onChangeText={setReason} placeholder="Explain what needs to be corrected..." placeholderTextColor={colors.outline} style={styles.reasonInput} value={reason} /><PillButton loading={acting} onPress={submitRejection}>Confirm Rejection</PillButton><Pressable disabled={acting} onPress={() => setRejecting(false)} style={styles.cancelReject}><AppText style={styles.cancelText}>Cancel</AppText></Pressable></SurfaceCard> : null}
           </Screen>
         </View>
       </View>
@@ -212,11 +222,15 @@ const styles = StyleSheet.create({
   warningSummary: { backgroundColor: colors.statusPendingBg }, successSummary: { backgroundColor: colors.statusApprovedBg }, dangerSummary: { backgroundColor: colors.statusRejectedBg },
   summaryValue: { color: colors.primary, fontFamily: fonts.displayBold, fontSize: fontSize.xl },
   summaryLabel: { color: colors.onSurfaceVariant, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
-  filters: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginVertical: space.md },
-  filter: { minHeight: 34, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, borderRadius: radius.full, backgroundColor: colors.surfaceHigh },
+  filterFrame: { height: 50, minHeight: 50, maxHeight: 50, marginVertical: space.md, overflow: "hidden" },
+  filterRail: { height: 50, minHeight: 50, maxHeight: 50, flexGrow: 0 },
+  filters: { height: 50, minHeight: 50, maxHeight: 50, alignItems: "center", gap: space.sm, paddingRight: space.lg },
+  filter: { height: 36, minHeight: 36, maxHeight: 36, flexGrow: 0, flexShrink: 0, alignItems: "center", justifyContent: "center", paddingHorizontal: space.md, borderRadius: radius.full, backgroundColor: colors.surfaceHigh },
   filterActive: { backgroundColor: colors.secondaryContainer },
   filterText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
   filterTextActive: { color: colors.onSecondaryContainer, fontFamily: fonts.bodyBold },
+  permission: { flexDirection: "row", alignItems: "center", marginBottom: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  permissionText: { flex: 1, marginLeft: space.sm, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
   list: { gap: space.sm },
   card: { minHeight: 96, flexDirection: "row", alignItems: "center", padding: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.xl, backgroundColor: colors.surface, ...shadows.subtle },
   pressed: { opacity: 0.75, transform: [{ scale: 0.99 }] },
@@ -248,6 +262,8 @@ const styles = StyleSheet.create({
   noProof: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: space.lg, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.surfaceHigh },
   noProofText: { marginLeft: space.sm, color: colors.outline, fontSize: fontSize.xs },
   actions: { marginTop: space.lg },
+  locked: { flexDirection: "row", marginTop: space.lg, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  lockedText: { flex: 1, marginLeft: space.sm, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
   rejectButton: { minHeight: 48, flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: space.sm },
   rejectText: { marginLeft: space.sm, color: colors.error, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
   rejectPanel: { marginTop: space.lg, backgroundColor: colors.errorContainer },
