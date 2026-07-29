@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { StyleSheet, View } from "react-native";
+import { Alert, StyleSheet, View } from "react-native";
 import { AppText, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
@@ -36,6 +36,13 @@ function AccountRow({ icon, label, value }) {
 
 export default function ProfileScreen() {
   const { isAuthenticating, logout, role, user } = useAuth();
+
+  function confirmLogout() {
+    Alert.alert("Log out?", "You will need to sign in again to access your portal.", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Log Out", style: "destructive", onPress: logout },
+    ]);
+  }
 
   return (
     <Screen contentContainerStyle={styles.content}>
@@ -81,7 +88,7 @@ export default function ProfileScreen() {
       <PillButton
         icon={<Ionicons color={colors.white} name="log-out-outline" size={19} />}
         loading={isAuthenticating}
-        onPress={logout}
+        onPress={confirmLogout}
         style={styles.logout}
       >
         Log Out

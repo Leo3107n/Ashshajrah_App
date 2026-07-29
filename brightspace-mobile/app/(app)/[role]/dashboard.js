@@ -7,6 +7,8 @@ import { useAuth } from "../../../src/context/AuthContext";
 import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 import CoordinatorHome from "../../../src/features/coordinator/CoordinatorHome";
+import SuperAdminHome from "../../../src/features/superadmin/SuperAdminHome";
+import AdminHome from "../../../src/features/admin/AdminHome";
 
 function time(value) {
   if (!value) return "--:--";
@@ -144,6 +146,8 @@ export default function Dashboard() {
   const { role } = useAuth();
   if (role === "student") return <StudentHome />;
   if (role === "coordinator") return <CoordinatorHome />;
+  if (role === "superadmin") return <SuperAdminHome />;
+  if (role === "admin") return <AdminHome />;
   return <OtherRoleHome />;
 }
 

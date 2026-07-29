@@ -3,7 +3,7 @@ import { usePathname, useRouter } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
-import { navigationForRole } from "../navigation/roleNavigation";
+import { isSupportedRole, navigationForRole } from "../navigation/roleNavigation";
 import { colors, fonts, fontSize, shadows, space } from "../theme";
 import { AppText } from "./ui";
 
@@ -12,6 +12,8 @@ export default function RoleBottomNavigation() {
   const router = useRouter();
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+
+  if (!isSupportedRole(role)) return null;
 
   return (
     <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 6) }]}>

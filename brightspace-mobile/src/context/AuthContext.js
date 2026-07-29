@@ -9,6 +9,7 @@ import {
 } from "react";
 import { AppState } from "react-native";
 import api, { ApiError, onUnauthorized } from "../api";
+import { normalizeRole } from "../navigation/roleNavigation";
 
 const AuthContext = createContext(null);
 
@@ -20,10 +21,6 @@ export const ROLE_HOME_ROUTES = Object.freeze({
   parent: "/(app)/parent/dashboard",
   student: "/(app)/student/dashboard",
 });
-
-function normalizeRole(value) {
-  return String(value || "").trim().toLowerCase();
-}
 
 function userFromSession(session) {
   return session?.user || null;
@@ -37,6 +34,7 @@ export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState("");
   const mountedRef = useRef(true);
   const refreshPromiseRef = useRef(null);
 
@@ -56,7 +54,8 @@ export function AuthProvider({ children }) {
     }
 
     const refreshPromise = api.auth
-      .session()
+      .restoreCookies()
+      .then(() => api.auth.session())
       .then((nextSession) => {
         if (!mountedRef.current) return nextSession;
 
@@ -119,6 +118,7 @@ export function AuthProvider({ children }) {
       if (mountedRef.current) {
         setSession(nextSession);
         setStatus("authenticated");
+        setNotice("");
       }
 
       return {
@@ -151,10 +151,14 @@ export function AuthProvider({ children }) {
   }, [clearSession]);
 
   const clearError = useCallback(() => setError(null), []);
+  const clearNotice = useCallback(() => setNotice(""), []);
 
   useEffect(() => {
     mountedRef.current = true;
-    const unsubscribe = onUnauthorized(() => clearSession());
+    const unsubscribe = onUnauthorized(() => {
+      setNotice("Your session expired. Please sign in again.");
+      clearSession();
+    });
 
     refreshSession().catch(() => {
       // State and the user-facing error are already set by refreshSession.
@@ -188,6 +192,7 @@ export function AuthProvider({ children }) {
       role,
       status,
       error,
+      notice,
       isLoading: status === "loading",
       isAuthenticating: status === "authenticating",
       isAuthenticated: status === "authenticated" && Boolean(user),
@@ -196,6 +201,7 @@ export function AuthProvider({ children }) {
       logout,
       refreshSession,
       clearError,
+      clearNotice,
     }),
     [
       session,
@@ -203,10 +209,12 @@ export function AuthProvider({ children }) {
       role,
       status,
       error,
+      notice,
       login,
       logout,
       refreshSession,
       clearError,
+      clearNotice,
     ]
   );
 

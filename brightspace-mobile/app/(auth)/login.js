@@ -26,7 +26,7 @@ function messageFor(error) {
 export default function LoginScreen() {
   const router = useRouter();
   const passwordRef = useRef(null);
-  const { clearError, homeRoute, isAuthenticated, login } = useAuth();
+  const { clearError, clearNotice, homeRoute, isAuthenticated, login, notice } = useAuth();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
@@ -109,6 +109,7 @@ export default function LoginScreen() {
               </View>
 
               <Pressable style={styles.forgot}><AppText style={styles.forgotText}>Forgot Password?</AppText></Pressable>
+              {notice && !error ? <Pressable onPress={clearNotice} style={styles.notice}><Ionicons color={colors.secondary} name="time-outline" size={18} /><AppText style={styles.noticeText}>{notice}</AppText></Pressable> : null}
               {error ? <View style={styles.error}><Ionicons color={colors.error} name="alert-circle-outline" size={18} /><AppText style={styles.errorText}>{error}</AppText></View> : null}
               <PillButton icon={<Ionicons color={colors.white} name="log-in-outline" size={19} />} loading={pending} onPress={submit}>Sign In</PillButton>
               <View style={styles.secure}><Ionicons color={colors.outline} name="shield-checkmark-outline" size={15} /><AppText style={styles.secureText}>Secure access managed by Ash-Shajrah</AppText></View>
@@ -139,6 +140,8 @@ const styles = StyleSheet.create({
   forgotText: { color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
   error: { flexDirection: "row", alignItems: "center", marginBottom: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.errorContainer },
   errorText: { flex: 1, marginLeft: space.sm, color: colors.error, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs, lineHeight: 18 },
+  notice: { flexDirection: "row", alignItems: "center", marginBottom: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  noticeText: { flex: 1, marginLeft: space.sm, color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs, lineHeight: 18 },
   secure: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: space.lg },
   secureText: { marginLeft: space.xs, color: colors.outline, fontSize: 10 },
 });

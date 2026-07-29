@@ -13,16 +13,18 @@ export const ROLE_NAVIGATION = {
     ["profile", "Profile", "person-outline", "person"],
   ],
   admin: [
-    ["dashboard", "Home", "home-outline", "home"],
+    ["dashboard", "Overview", "grid-outline", "grid"],
     ["users", "Users", "people-outline", "people"],
-    ["courses", "Courses", "school-outline", "school"],
-    ["profile", "Profile", "person-outline", "person"],
+    ["academics", "Academics", "school-outline", "school"],
+    ["admissions", "Admissions", "person-add-outline", "person-add"],
+    ["more", "More", "apps-outline", "apps"],
   ],
   superadmin: [
-    ["dashboard", "Home", "home-outline", "home"],
+    ["dashboard", "Overview", "grid-outline", "grid"],
     ["users", "Users", "people-outline", "people"],
-    ["settings", "Settings", "settings-outline", "settings"],
-    ["profile", "Profile", "person-outline", "person"],
+    ["academics", "Academics", "school-outline", "school"],
+    ["finance", "Finance", "wallet-outline", "wallet"],
+    ["more", "More", "apps-outline", "apps"],
   ],
   teacher: [
     ["dashboard", "Home", "home-outline", "home"],
@@ -38,10 +40,41 @@ export const ROLE_NAVIGATION = {
   ],
 };
 
+export const SUPPORTED_ROLES = Object.freeze(Object.keys(ROLE_NAVIGATION));
+const EXTRA_ROLE_SECTIONS = Object.freeze({
+  admin: ["payments", "admission-review", "communications", "reports", "audit", "profile"],
+  superadmin: ["admissions", "admission-review", "communications", "reports", "audit", "profile"],
+});
+const EXTRA_SECTION_TITLES = Object.freeze({
+  admissions: "Admissions",
+  "admission-review": "Admission Review",
+  communications: "Communications",
+  reports: "Reports",
+  audit: "Audit History",
+  profile: "Profile",
+  payments: "Payments",
+});
+
+export function normalizeRole(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+export function isSupportedRole(role) {
+  return SUPPORTED_ROLES.includes(normalizeRole(role));
+}
+
 export function navigationForRole(role) {
-  return ROLE_NAVIGATION[role] || ROLE_NAVIGATION.student;
+  return ROLE_NAVIGATION[normalizeRole(role)] || [];
+}
+
+export function isSectionAllowed(role, section) {
+  const normalizedSection = String(section || "").trim().toLowerCase();
+  return (
+    navigationForRole(role).some(([key]) => key === normalizedSection) ||
+    (EXTRA_ROLE_SECTIONS[normalizeRole(role)] || []).includes(normalizedSection)
+  );
 }
 
 export function sectionTitle(role, section) {
-  return navigationForRole(role).find(([key]) => key === section)?.[1] || "Portal";
+  return navigationForRole(role).find(([key]) => key === section)?.[1] || EXTRA_SECTION_TITLES[section] || "Portal";
 }

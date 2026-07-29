@@ -9,10 +9,12 @@
  *
  * Authentication uses the existing NextAuth cookie session. Native fetch cookie
  * persistence varies between Expo Go/platform versions, so native responses are
- * also mirrored into a memory-only cookie jar. Nothing is written to
- * AsyncStorage and passwords are never retained.
+ * also mirrored into a native cookie jar. Session cookies are encrypted with
+ * SecureStore so authenticated sessions can survive an app restart. Passwords
+ * are never retained.
  */
 
+import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -24,6 +26,8 @@ export const API_BASE_URL = String(configuredBaseUrl || "")
 const DEFAULT_TIMEOUT_MS = 30_000;
 const unauthorizedListeners = new Set();
 const nativeCookies = new Map();
+const COOKIE_STORE_KEY = "ash_shajrah_auth_cookies";
+let nativeCookiesHydrated = false;
 
 function isNativeRuntime() {
   return Platform.OS !== "web";
@@ -47,15 +51,28 @@ function rememberResponseCookies(response) {
       : splitSetCookieHeader(response.headers?.get?.("set-cookie"));
 
   for (const value of values || []) {
-    const pair = String(value).split(";", 1)[0];
+    const rawCookie = String(value);
+    const pair = rawCookie.split(";", 1)[0];
     const separator = pair.indexOf("=");
     if (separator <= 0) continue;
 
     const name = pair.slice(0, separator).trim();
     const cookieValue = pair.slice(separator + 1).trim();
-    if (!cookieValue) nativeCookies.delete(name);
+    const maxAgeExpired = /;\s*max-age=0(?:;|$)/i.test(rawCookie);
+    const expiresMatch = rawCookie.match(/;\s*expires=([^;]+)/i);
+    const expiresAt = expiresMatch ? Date.parse(expiresMatch[1]) : Number.NaN;
+    const dateExpired = Number.isFinite(expiresAt) && expiresAt <= Date.now();
+
+    if (!cookieValue || maxAgeExpired || dateExpired) nativeCookies.delete(name);
     else nativeCookies.set(name, cookieValue);
   }
+
+  SecureStore.setItemAsync(
+    COOKIE_STORE_KEY,
+    JSON.stringify(Object.fromEntries(nativeCookies))
+  ).catch(() => {
+    // Native cookie persistence is a convenience; the in-memory session remains valid.
+  });
 }
 
 function nativeCookieHeader() {
@@ -67,6 +84,24 @@ function nativeCookieHeader() {
 
 function clearNativeCookies() {
   nativeCookies.clear();
+  nativeCookiesHydrated = true;
+  if (isNativeRuntime()) {
+    SecureStore.deleteItemAsync(COOKIE_STORE_KEY).catch(() => {});
+  }
+}
+
+async function restoreNativeCookies() {
+  if (!isNativeRuntime() || nativeCookiesHydrated) return;
+  nativeCookiesHydrated = true;
+  try {
+    const stored = await SecureStore.getItemAsync(COOKIE_STORE_KEY);
+    const parsed = stored ? JSON.parse(stored) : {};
+    Object.entries(parsed || {}).forEach(([name, value]) => {
+      if (name && value) nativeCookies.set(name, String(value));
+    });
+  } catch {
+    nativeCookies.clear();
+  }
 }
 
 export class ApiError extends Error {
@@ -291,6 +326,7 @@ const remove = (path, body, options) =>
   request(path, { ...options, method: "DELETE", body });
 
 export const authApi = {
+  restoreCookies: restoreNativeCookies,
   session: () => get("/api/auth/session"),
   csrf: () => get("/api/auth/csrf"),
   providers: () => get("/api/auth/providers"),
@@ -583,7 +619,9 @@ export const coordinatorApi = {
   payments: {
     list: (query) => get("/api/coordinator/payments", query),
     verify: (id, data) =>
-      post(`/api/coordinator/payments/${encodePath(id)}/verify`, data),
+      post(`/api/coordinator/payments/${encodePath(id)}/verify`, data, {
+        timeoutMs: 60_000,
+      }),
   },
 
   lectureSchedules: {
@@ -680,14 +718,16 @@ export const adminApi = {
     list: (query) => get("/api/admin/other-fees", query),
     create: (data) => post("/api/admin/other-fees", data),
     update: (data) => patch("/api/admin/other-fees", data),
-    delete: (data) => remove("/api/admin/other-fees", data),
+    delete: (id) =>
+      remove(withQuery("/api/admin/other-fees", { id })),
   },
 
   paymentMethods: {
     list: (query) => get("/api/admin/payment-methods", query),
     create: (data) => post("/api/admin/payment-methods", data),
     update: (data) => patch("/api/admin/payment-methods", data),
-    delete: (data) => remove("/api/admin/payment-methods", data),
+    delete: (id) =>
+      remove(withQuery("/api/admin/payment-methods", { id })),
   },
 
   careerApplications: {

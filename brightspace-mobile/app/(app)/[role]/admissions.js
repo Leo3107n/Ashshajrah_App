@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import api from "../../../src/api";
 import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 const FILTERS = ["All", "New", "Sent", "Submitted"];
@@ -41,6 +42,8 @@ function label(value) {
 }
 
 export default function CoordinatorAdmissions() {
+  const { role } = useAuth();
+  const readOnly = role === "admin";
   const [items, setItems] = useState([]);
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
@@ -160,6 +163,8 @@ export default function CoordinatorAdmissions() {
           {FILTERS.map((item) => <Pressable key={item} onPress={() => setFilter(item)} style={[styles.filter, filter === item ? styles.filterActive : null]}><AppText style={[styles.filterText, filter === item ? styles.filterTextActive : null]}>{item}</AppText></Pressable>)}
         </View>
 
+        {readOnly ? <View style={styles.permissionNote}><Ionicons color={colors.secondary} name="eye-outline" size={20} /><AppText style={styles.permissionText}>Admin review access: inquiry workflow actions are managed by Coordinator or Super Admin.</AppText></View> : null}
+
         {error ? <SurfaceCard style={styles.error}><Ionicons color={colors.error} name="alert-circle-outline" size={22} /><AppText style={styles.errorText}>{error}</AppText><Pressable onPress={() => load()}><AppText style={styles.retry}>Retry</AppText></Pressable></SurfaceCard> : null}
 
         <View style={styles.list}>
@@ -170,6 +175,7 @@ export default function CoordinatorAdmissions() {
       <LeadDetail
         acting={acting}
         item={selected}
+        readOnly={readOnly}
         onClose={() => !acting && setSelected(null)}
         onDelete={confirmDelete}
         onGenerate={confirmGenerate}
@@ -198,7 +204,7 @@ function DetailRow({ icon, label: rowLabel, value }) {
   return <View style={styles.detailRow}><Ionicons color={colors.secondary} name={icon} size={18} /><View style={styles.detailText}><AppText style={styles.detailLabel}>{rowLabel}</AppText><AppText style={styles.detailValue}>{value || "Not provided"}</AppText></View></View>;
 }
 
-function LeadDetail({ acting, item, onClose, onDelete, onGenerate, onParentStatus }) {
+function LeadDetail({ acting, item, onClose, onDelete, onGenerate, onParentStatus, readOnly }) {
   if (!item) return null;
   const status = cleanStatus(item);
   const canDelete = !["sent", "submitted", "reminded", "overdue", "not_submitted"].includes(status);
@@ -220,12 +226,16 @@ function LeadDetail({ acting, item, onClose, onDelete, onGenerate, onParentStatu
             </SurfaceCard>
             {item.message ? <SurfaceCard elevated={false} style={styles.message}><AppText style={styles.messageLabel}>FAMILY MESSAGE</AppText><AppText style={styles.messageText}>{item.message}</AppText></SurfaceCard> : null}
             <AppText style={styles.subheading}>Parent form status</AppText>
-            <View style={styles.parentStatuses}>
-              {["no", "checking issue", "resolved", "yes"].map((value) => <Pressable disabled={acting} key={value} onPress={() => onParentStatus(item, value)} style={[styles.parentStatus, item.parent_form_sent_status === value ? styles.parentStatusActive : null]}><AppText style={[styles.parentStatusText, item.parent_form_sent_status === value ? styles.parentStatusTextActive : null]}>{value}</AppText></Pressable>)}
-            </View>
-            <PillButton icon={<Ionicons color={colors.white} name="send-outline" size={18} />} loading={acting} onPress={() => onGenerate(item)}>{item.registration_token ? "Resend Admission Link" : "Send Admission Form"}</PillButton>
+            {readOnly ? (
+              <View style={styles.readOnlyStatus}><Ionicons color={colors.secondary} name="lock-closed-outline" size={18} /><AppText style={styles.readOnlyStatusText}>{label(item.parent_form_sent_status || "not updated")}</AppText></View>
+            ) : (
+              <View style={styles.parentStatuses}>
+                {["no", "checking issue", "resolved", "yes"].map((value) => <Pressable disabled={acting} key={value} onPress={() => onParentStatus(item, value)} style={[styles.parentStatus, item.parent_form_sent_status === value ? styles.parentStatusActive : null]}><AppText style={[styles.parentStatusText, item.parent_form_sent_status === value ? styles.parentStatusTextActive : null]}>{value}</AppText></Pressable>)}
+              </View>
+            )}
+            {!readOnly ? <PillButton icon={<Ionicons color={colors.white} name="send-outline" size={18} />} loading={acting} onPress={() => onGenerate(item)}>{item.registration_token ? "Resend Admission Link" : "Send Admission Form"}</PillButton> : null}
             {item.registration_link && <PillButton onPress={() => Linking.openURL(item.registration_link)} style={styles.secondaryAction} variant="outline">Open Registration Form</PillButton>}
-            {canDelete ? <Pressable disabled={acting} onPress={() => onDelete(item)} style={styles.delete}><Ionicons color={colors.error} name="trash-outline" size={18} /><AppText style={styles.deleteText}>Hide this lead</AppText></Pressable> : null}
+            {!readOnly && canDelete ? <Pressable disabled={acting} onPress={() => onDelete(item)} style={styles.delete}><Ionicons color={colors.error} name="trash-outline" size={18} /><AppText style={styles.deleteText}>Hide this lead</AppText></Pressable> : null}
           </Screen>
         </View>
       </View>
@@ -248,6 +258,8 @@ const styles = StyleSheet.create({
   filterActive: { backgroundColor: colors.secondaryContainer },
   filterText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
   filterTextActive: { color: colors.onSecondaryContainer, fontFamily: fonts.bodyBold },
+  permissionNote: { flexDirection: "row", alignItems: "center", marginBottom: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  permissionText: { flex: 1, marginLeft: space.sm, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
   list: { gap: space.sm },
   card: { minHeight: 92, flexDirection: "row", alignItems: "center", padding: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.xl, backgroundColor: colors.surface, ...shadows.subtle },
   pressed: { opacity: 0.75, transform: [{ scale: 0.99 }] },
@@ -286,6 +298,8 @@ const styles = StyleSheet.create({
   parentStatusActive: { backgroundColor: colors.secondaryContainer },
   parentStatusText: { color: colors.onSurfaceVariant, fontSize: fontSize.xs, textTransform: "capitalize" },
   parentStatusTextActive: { color: colors.onSecondaryContainer, fontFamily: fonts.bodyBold },
+  readOnlyStatus: { minHeight: 44, flexDirection: "row", alignItems: "center", marginBottom: space.lg, paddingHorizontal: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.lg, backgroundColor: colors.surfaceLow },
+  readOnlyStatusText: { marginLeft: space.sm, color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.sm, textTransform: "capitalize" },
   secondaryAction: { marginTop: space.md },
   delete: { flexDirection: "row", alignItems: "center", justifyContent: "center", minHeight: 48, marginTop: space.lg },
   deleteText: { marginLeft: space.sm, color: colors.error, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
