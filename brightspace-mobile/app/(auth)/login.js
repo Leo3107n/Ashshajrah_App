@@ -1,3 +1,7 @@
+/**
+ * Mobile login based on the supplied Ash-Shajrah reference. Validates input,
+ * authenticates through AuthContext, and routes users to their role home.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";

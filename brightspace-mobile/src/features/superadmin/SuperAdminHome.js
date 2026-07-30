@@ -1,10 +1,11 @@
+/** Super Admin command center for system-wide metrics and privileged tools. */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import api from "../../api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
@@ -51,12 +52,7 @@ export default function SuperAdminHome() {
   }, [load]);
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <Ionicons color={colors.gold} name="leaf-outline" size={34} />
-        <AppText style={styles.loading}>Preparing your command center...</AppText>
-      </View>
-    );
+    return <DashboardSkeleton message="Preparing your command center..." />;
   }
 
   if (error) {

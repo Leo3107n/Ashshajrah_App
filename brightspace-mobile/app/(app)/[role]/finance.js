@@ -1,3 +1,4 @@
+/** Super Admin finance workspace with backend-enforced mutation boundaries. */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -12,7 +13,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 const PAYMENT_FILTERS = ["all", "pending", "verified", "rejected"];
@@ -225,7 +226,7 @@ export default function SuperAdminFinance() {
   }
 
   if (loading) {
-    return <View style={styles.center}><Ionicons color={colors.gold} name="wallet-outline" size={34} /><AppText style={styles.loading}>Balancing the finance workspace...</AppText></View>;
+    return <DashboardSkeleton message="Balancing the finance workspace..." />;
   }
 
   const counts = payments.counts || {};

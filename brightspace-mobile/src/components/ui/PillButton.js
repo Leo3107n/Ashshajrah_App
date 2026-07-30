@@ -1,11 +1,13 @@
+/** Rounded brand button with variants, async state, and leaf spinner feedback. */
 import { LinearGradient } from "expo-linear-gradient";
-import { ActivityIndicator, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { LeafSpinner } from "../LoadingAnimations";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 import AppText from "./AppText";
 
 export default function PillButton({ children, disabled = false, icon, loading = false, onPress, style, textStyle, variant = "primary" }) {
   const inactive = disabled || loading;
-  const content = loading ? <ActivityIndicator color={variant === "primary" ? colors.white : colors.secondary} /> : <>{icon ? <View style={styles.icon}>{icon}</View> : null}<AppText style={[variant === "primary" ? styles.primaryText : styles.secondaryText, textStyle]}>{children}</AppText></>;
+  const content = loading ? <LeafSpinner color={variant === "primary" ? colors.white : colors.secondary} /> : <>{icon ? <View style={styles.icon}>{icon}</View> : null}<AppText style={[variant === "primary" ? styles.primaryText : styles.secondaryText, textStyle]}>{children}</AppText></>;
 
   return (
     <Pressable accessibilityRole="button" disabled={inactive} onPress={onPress} style={({ pressed }) => [styles.pressable, variant === "primary" ? shadows.button : null, pressed && !inactive ? styles.pressed : null, inactive ? styles.disabled : null, style]}>

@@ -1,3 +1,4 @@
+/** Bottom navigation generated from the centralized per-role route map. */
 import { Ionicons } from "@expo/vector-icons";
 import { usePathname, useRouter } from "expo-router";
 import { Pressable, StyleSheet, View } from "react-native";
@@ -20,7 +21,15 @@ export default function RoleBottomNavigation() {
       {navigationForRole(role).map(([key, label, icon, activeIcon]) => {
         const active = pathname.endsWith(`/${key}`);
         return (
-          <Pressable key={key} onPress={() => router.replace(`/(app)/${role}/${key}`)} style={styles.item}>
+          <Pressable
+            accessibilityLabel={label}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            disabled={active}
+            key={key}
+            onPress={() => router.replace(`/(app)/${role}/${key}`)}
+            style={styles.item}
+          >
             <View style={[styles.iconWrap, active ? styles.active : null]}>
               <Ionicons color={active ? colors.onSecondaryContainer : colors.onSurfaceVariant} name={active ? activeIcon : icon} size={21} />
             </View>

@@ -25,6 +25,7 @@ export const API_BASE_URL = String(configuredBaseUrl || "")
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const unauthorizedListeners = new Set();
+const forbiddenListeners = new Set();
 const nativeCookies = new Map();
 const COOKIE_STORE_KEY = "ash_shajrah_auth_cookies";
 let nativeCookiesHydrated = false;
@@ -129,12 +130,36 @@ export function onUnauthorized(listener) {
   return () => unauthorizedListeners.delete(listener);
 }
 
+/**
+ * Subscribe to role/permission denials. Protected layouts normally prevent
+ * these requests; this is a final boundary for stale links or changed server
+ * permissions so raw backend wording is never rendered inside a screen.
+ */
+export function onForbidden(listener) {
+  if (typeof listener !== "function") {
+    throw new TypeError("onForbidden requires a function.");
+  }
+
+  forbiddenListeners.add(listener);
+  return () => forbiddenListeners.delete(listener);
+}
+
 function notifyUnauthorized(error) {
   unauthorizedListeners.forEach((listener) => {
     try {
       listener(error);
     } catch {
       // A UI listener must never prevent the original API error from surfacing.
+    }
+  });
+}
+
+function notifyForbidden(error) {
+  forbiddenListeners.forEach((listener) => {
+    try {
+      listener(error);
+    } catch {
+      // Navigation listeners must never interfere with the original request.
     }
   });
 }
@@ -272,7 +297,9 @@ export async function request(path, options = {}) {
 
     if (!response.ok) {
       const apiError = new ApiError(
-        extractMessage(data, `Request failed with status ${response.status}.`),
+        response.status === 403
+          ? "This section is not available for your account."
+          : extractMessage(data, `Request failed with status ${response.status}.`),
         {
           status: response.status,
           code: data?.code || data?.error?.code || null,
@@ -282,6 +309,7 @@ export async function request(path, options = {}) {
       );
 
       if (response.status === 401) notifyUnauthorized(apiError);
+      if (response.status === 403) notifyForbidden(apiError);
       throw apiError;
     }
 
@@ -424,6 +452,11 @@ export const paymentApi = {
 export const sharedApi = {
   activeHeadlines: () => get("/api/headlines/active"),
   filePreview: (query) => get("/api/file-preview", query),
+  notifications: {
+    list: (query) => get("/api/notifications", query),
+    markRead: (id) => patch("/api/notifications", { id }),
+    markAllRead: () => patch("/api/notifications", { all: true }),
+  },
 
   internalEvents: {
     list: (query) => get("/api/internal-events", query),
@@ -448,7 +481,10 @@ export const sharedApi = {
 
 export const teacherApi = {
   dashboard: (query) => get("/api/teacher/dashboard", query),
-  profile: () => get("/api/teacher/profile"),
+  profile: {
+    get: () => get("/api/teacher/profile"),
+    update: (data) => patch("/api/teacher/profile", data),
+  },
   students: (query) => get("/api/teacher/students", query),
   classes: (query) => get("/api/teacher/classes", query),
   calendarLectures: (query) => get("/api/teacher/calendar-lectures", query),

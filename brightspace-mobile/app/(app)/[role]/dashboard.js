@@ -1,14 +1,19 @@
+/**
+ * Dashboard dispatcher. Uses dedicated Admin, Super Admin, and Coordinator
+ * homes, with a shared dashboard implementation for other roles.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Linking, Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import api from "../../../src/api";
 import { useAuth } from "../../../src/context/AuthContext";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 import CoordinatorHome from "../../../src/features/coordinator/CoordinatorHome";
 import SuperAdminHome from "../../../src/features/superadmin/SuperAdminHome";
 import AdminHome from "../../../src/features/admin/AdminHome";
+import TeacherHome from "../../../src/features/teacher/TeacherHome";
 
 function time(value) {
   if (!value) return "--:--";
@@ -64,7 +69,7 @@ function StudentHome() {
   ];
 
   if (loading) {
-    return <View style={styles.center}><Ionicons color={colors.gold} name="leaf-outline" size={34} /><AppText style={styles.loading}>Growing your dashboard...</AppText></View>;
+    return <DashboardSkeleton message="Growing your dashboard..." />;
   }
 
   if (error) {
@@ -144,10 +149,14 @@ function OtherRoleHome() {
 
 export default function Dashboard() {
   const { role } = useAuth();
+  // Each completed operational role receives its own dashboard component.
+  // Keeping dispatch here preserves one protected route while avoiding a
+  // single component filled with cross-role API and permission conditions.
   if (role === "student") return <StudentHome />;
   if (role === "coordinator") return <CoordinatorHome />;
   if (role === "superadmin") return <SuperAdminHome />;
   if (role === "admin") return <AdminHome />;
+  if (role === "teacher") return <TeacherHome />;
   return <OtherRoleHome />;
 }
 

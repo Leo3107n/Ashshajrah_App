@@ -1,3 +1,4 @@
+/** Fixed semantic badge for consistent success, warning, danger, and status UI. */
 import { StyleSheet, View } from "react-native";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 import AppText from "./AppText";

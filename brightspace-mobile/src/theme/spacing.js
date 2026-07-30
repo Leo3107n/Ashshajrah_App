@@ -1,3 +1,4 @@
+/** Shared spacing and radius scales used to keep mobile layouts consistent. */
 export const spacing = {
   "0": 0,
   "1": 4,

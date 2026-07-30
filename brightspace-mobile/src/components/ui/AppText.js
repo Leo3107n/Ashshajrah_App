@@ -1,3 +1,4 @@
+/** Semantic Text primitive backed by the Ash-Shajrah typography tokens. */
 import { StyleSheet, Text } from "react-native";
 import { colors, fonts, fontSize, letterSpacing, lineHeight } from "../../theme";
 

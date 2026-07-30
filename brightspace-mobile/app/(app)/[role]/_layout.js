@@ -1,3 +1,4 @@
+/** Validates session, role ownership, and section permission before rendering. */
 import { Redirect, Slot, useLocalSearchParams, usePathname } from "expo-router";
 import AuthGateScreen from "../../../src/components/AuthGateScreen";
 import { getRoleHomeRoute, useAuth } from "../../../src/context/AuthContext";

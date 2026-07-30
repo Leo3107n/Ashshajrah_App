@@ -1,3 +1,4 @@
+/** Standard cream screen canvas with spacing, scrolling, and refresh support. */
 import { ScrollView, StyleSheet, View } from "react-native";
 import { colors, space } from "../../theme";
 

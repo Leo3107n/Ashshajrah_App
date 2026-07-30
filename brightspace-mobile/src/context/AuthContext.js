@@ -1,3 +1,7 @@
+/**
+ * Central mobile authentication state. Restores native cookies, establishes
+ * role-aware sessions, refreshes on foreground, and clears expired sessions.
+ */
 import {
   createContext,
   useCallback,
@@ -7,9 +11,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { useRouter } from "expo-router";
 import { AppState } from "react-native";
-import api, { ApiError, onUnauthorized } from "../api";
-import { normalizeRole } from "../navigation/roleNavigation";
+import api, { ApiError, onForbidden, onUnauthorized } from "../api";
+import {
+  isSupportedRole,
+  normalizeRole,
+} from "../navigation/roleNavigation";
 
 const AuthContext = createContext(null);
 
@@ -26,11 +34,22 @@ function userFromSession(session) {
   return session?.user || null;
 }
 
+function hasUsableSession(session) {
+  const sessionUser = userFromSession(session);
+  const accountStatus = String(sessionUser?.status || "active").toLowerCase();
+  return Boolean(
+    sessionUser?.id &&
+    isSupportedRole(sessionUser?.role) &&
+    accountStatus === "active"
+  );
+}
+
 export function getRoleHomeRoute(role) {
   return ROLE_HOME_ROUTES[normalizeRole(role)] || "/(auth)/login";
 }
 
 export function AuthProvider({ children }) {
+  const router = useRouter();
   const [session, setSession] = useState(null);
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
@@ -45,6 +64,8 @@ export function AuthProvider({ children }) {
   }, []);
 
   const refreshSession = useCallback(async ({ silent = false } = {}) => {
+    // Reuse an in-flight refresh so app startup and foreground events cannot
+    // race each other and overwrite a newer authentication result.
     if (refreshPromiseRef.current) return refreshPromiseRef.current;
 
     if (!silent && mountedRef.current) {
@@ -59,7 +80,9 @@ export function AuthProvider({ children }) {
       .then((nextSession) => {
         if (!mountedRef.current) return nextSession;
 
-        if (userFromSession(nextSession)) {
+        // Never mount protected navigation from a stale, suspended, or
+        // unsupported session, even if a cookie can still be decrypted.
+        if (hasUsableSession(nextSession)) {
           setSession(nextSession);
           setStatus("authenticated");
           setError(null);
@@ -115,6 +138,13 @@ export function AuthProvider({ children }) {
         password: String(password),
       });
 
+      if (!hasUsableSession(nextSession)) {
+        throw new ApiError("This account cannot access the mobile portal.", {
+          status: 403,
+          code: "UNSUPPORTED_OR_INACTIVE_ACCOUNT",
+        });
+      }
+
       if (mountedRef.current) {
         setSession(nextSession);
         setStatus("authenticated");
@@ -152,9 +182,21 @@ export function AuthProvider({ children }) {
 
   const clearError = useCallback(() => setError(null), []);
   const clearNotice = useCallback(() => setNotice(""), []);
+  const updateSessionUser = useCallback((patch) => {
+    // Profile endpoints update the database, while the encrypted JWT remains
+    // immutable until the next sign-in. Mirror permitted display fields in
+    // local session state so headers update immediately.
+    setSession((current) => current?.user
+      ? { ...current, user: { ...current.user, ...patch } }
+      : current);
+  }, []);
+  const user = userFromSession(session);
+  const role = normalizeRole(user?.role);
 
   useEffect(() => {
     mountedRef.current = true;
+    // api.js emits one centralized unauthorized event for any protected API
+    // response, allowing every screen to share the same expiry behavior.
     const unsubscribe = onUnauthorized(() => {
       setNotice("Your session expired. Please sign in again.");
       clearSession();
@@ -171,6 +213,19 @@ export function AuthProvider({ children }) {
   }, [clearSession, refreshSession]);
 
   useEffect(() => {
+    // A 403 represents a route/action outside the signed-in role. Return to
+    // that role's safe landing page instead of mounting an error page.
+    const unsubscribe = onForbidden(() => {
+      if (status === "authenticated" && role) {
+        router.replace(getRoleHomeRoute(role));
+      }
+    });
+    return unsubscribe;
+  }, [role, router, status]);
+
+  useEffect(() => {
+    // Revalidate the cookie when the app returns from the background instead
+    // of trusting a session that may have expired while the phone was idle.
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState === "active" && status === "authenticated") {
         refreshSession({ silent: true }).catch(() => {
@@ -181,9 +236,6 @@ export function AuthProvider({ children }) {
 
     return () => subscription.remove();
   }, [refreshSession, status]);
-
-  const user = userFromSession(session);
-  const role = normalizeRole(user?.role);
 
   const value = useMemo(
     () => ({
@@ -202,6 +254,7 @@ export function AuthProvider({ children }) {
       refreshSession,
       clearError,
       clearNotice,
+      updateSessionUser,
     }),
     [
       session,
@@ -215,6 +268,7 @@ export function AuthProvider({ children }) {
       refreshSession,
       clearError,
       clearNotice,
+      updateSessionUser,
     ]
   );
 

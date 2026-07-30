@@ -1,3 +1,7 @@
+/**
+ * Academics workspace for classes, subjects, and lectures. UI actions are
+ * role-aware and every permission boundary is also enforced by the APIs.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -11,7 +15,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -212,7 +216,7 @@ export default function SuperAdminAcademics() {
   }
 
   if (loading) {
-    return <View style={styles.center}><Ionicons color={colors.gold} name="school-outline" size={34} /><AppText style={styles.loading}>Preparing the academic catalog...</AppText></View>;
+    return <DashboardSkeleton message="Preparing the academic catalog..." />;
   }
 
   const summary = view === "classes" ? courses.summary : subjects.summary;

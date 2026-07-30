@@ -1,3 +1,7 @@
+/**
+ * Admissions pipeline. Displays interested-student progress and conditionally
+ * exposes only the operations granted to the signed-in role.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -11,7 +15,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -137,7 +141,7 @@ export default function CoordinatorAdmissions() {
     ]);
   }
 
-  if (loading) return <View style={styles.center}><Ionicons color={colors.gold} name="people-outline" size={34} /><AppText style={styles.loading}>Loading admissions...</AppText></View>;
+  if (loading) return <DashboardSkeleton message="Loading admissions..." />;
 
   return (
     <>

@@ -1,10 +1,11 @@
+/** Coordinator home summarizing admissions, payments, and lecture operations. */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import api from "../../api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
@@ -48,12 +49,7 @@ export default function CoordinatorHome() {
   useEffect(() => { load(); }, [load]);
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <Ionicons color={colors.gold} name="leaf-outline" size={34} />
-        <AppText style={styles.loading}>Preparing your workspace...</AppText>
-      </View>
-    );
+    return <DashboardSkeleton message="Preparing your workspace..." />;
   }
 
   if (error) {

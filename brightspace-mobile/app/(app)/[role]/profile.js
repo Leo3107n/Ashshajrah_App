@@ -1,8 +1,10 @@
+/** Shared identity, secure-session information, and confirmed logout screen. */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Alert, StyleSheet, View } from "react-native";
 import { AppText, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
+import TeacherProfile from "../../../src/features/teacher/TeacherProfile";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 function displayName(user) {
@@ -36,6 +38,9 @@ function AccountRow({ icon, label, value }) {
 
 export default function ProfileScreen() {
   const { isAuthenticating, logout, role, user } = useAuth();
+  // Teacher has a dedicated professional profile and assignment view. Other
+  // roles retain the shared identity/session screen below.
+  if (role === "teacher") return <TeacherProfile />;
 
   function confirmLogout() {
     Alert.alert("Log out?", "You will need to sign in again to access your portal.", [

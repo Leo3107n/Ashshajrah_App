@@ -1,8 +1,12 @@
+/**
+ * Read-only admission review. Combines submitted records, parent interviews,
+ * and scholarships into filterable detail views.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import api from "../../../src/api";
-import { AppText, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -68,7 +72,7 @@ export default function AdmissionReview() {
   }, [data, search, view]);
 
   if (loading) {
-    return <View style={styles.center}><Ionicons color={colors.gold} name="documents-outline" size={34} /><AppText style={styles.loading}>Reviewing admission records...</AppText></View>;
+    return <DashboardSkeleton message="Reviewing admission records..." />;
   }
 
   return (

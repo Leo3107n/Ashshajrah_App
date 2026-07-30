@@ -1,3 +1,4 @@
+/** User directory and management UI with protected-account role boundaries. */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -11,7 +12,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -182,7 +183,7 @@ export default function SuperAdminUsers() {
   }
 
   if (loading) {
-    return <View style={styles.center}><Ionicons color={colors.gold} name="people-outline" size={34} /><AppText style={styles.loading}>Growing the community directory...</AppText></View>;
+    return <DashboardSkeleton message="Growing the community directory..." />;
   }
 
   return (

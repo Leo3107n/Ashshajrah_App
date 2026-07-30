@@ -1,3 +1,7 @@
+/**
+ * Single source of truth for role navigation and route authorization. The
+ * shell and protected layout share these maps to prevent permission drift.
+ */
 export const ROLE_NAVIGATION = {
   student: [
     ["dashboard", "Home", "home-outline", "home"],
@@ -27,8 +31,11 @@ export const ROLE_NAVIGATION = {
     ["more", "More", "apps-outline", "apps"],
   ],
   teacher: [
+    // Teacher tabs follow the daily workflow: overview, assigned teaching,
+    // scheduled delivery, homework work, then account/session controls.
     ["dashboard", "Home", "home-outline", "home"],
     ["classes", "Classes", "school-outline", "school"],
+    ["lectures", "Lectures", "calendar-outline", "calendar"],
     ["homework", "Homework", "book-outline", "book"],
     ["profile", "Profile", "person-outline", "person"],
   ],
@@ -44,18 +51,31 @@ export const SUPPORTED_ROLES = Object.freeze(Object.keys(ROLE_NAVIGATION));
 const EXTRA_ROLE_SECTIONS = Object.freeze({
   admin: ["payments", "admission-review", "communications", "reports", "audit", "profile"],
   superadmin: ["admissions", "admission-review", "communications", "reports", "audit", "profile"],
+  // These Student workspaces are reached from dashboard cards and detail
+  // links instead of consuming another slot in the five-item bottom bar.
+  student: ["lectures", "attendance", "notes", "notifications"],
+  // Teachers receive only their operational completion-report workspace.
+  // Generic administrative reporting remains limited to Admin/Super Admin.
+  teacher: ["attendance", "completion-reports", "notes", "notifications"],
 });
 const EXTRA_SECTION_TITLES = Object.freeze({
   admissions: "Admissions",
   "admission-review": "Admission Review",
   communications: "Communications",
   reports: "Reports",
+  "completion-reports": "Completion Reports",
   audit: "Audit History",
   profile: "Profile",
   payments: "Payments",
+  attendance: "Attendance",
+  lectures: "Lectures",
+  notes: "Notes",
+  notifications: "Notifications",
 });
 
 export function normalizeRole(value) {
+  // Database/API role spellings are collapsed to the route format so values
+  // such as "super_admin", "Super Admin", and "super-admin" behave equally.
   return String(value || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
 

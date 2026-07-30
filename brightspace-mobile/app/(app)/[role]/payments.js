@@ -1,3 +1,4 @@
+/** Role-aware payment verification and read-only payment review workspace. */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -12,7 +13,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -92,7 +93,7 @@ export default function CoordinatorPayments() {
     ]);
   }
 
-  if (loading) return <View style={styles.center}><Ionicons color={colors.gold} name="wallet-outline" size={34} /><AppText style={styles.loading}>Loading payments...</AppText></View>;
+  if (loading) return <DashboardSkeleton message="Loading payments..." />;
 
   return (
     <>

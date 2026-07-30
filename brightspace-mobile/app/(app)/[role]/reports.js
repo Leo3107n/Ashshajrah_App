@@ -1,8 +1,9 @@
+/** Period-filtered, read-only operational reporting and recent activity. */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../../src/api";
-import { AppText, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 const RANGES = [7, 30, 90, 365];
@@ -31,7 +32,7 @@ export default function Reports() {
     { label: "Learner Activity", value: total(summary.studentActivity), icon: "pulse-outline" },
   ], [summary]);
 
-  if (loading) return <View style={styles.center}><Ionicons color={colors.gold} name="bar-chart-outline" size={34} /><AppText style={styles.loading}>Building your insights...</AppText></View>;
+  if (loading) return <DashboardSkeleton message="Building your insights..." />;
   return <Screen contentContainerStyle={styles.content} refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}>
     <View style={styles.headingRow}><View style={styles.headingBody}><AppText variant="display">Reports</AppText><AppText style={styles.subtitle}>Read-only operational performance and activity.</AppText></View><View style={styles.readOnly}><Ionicons color={colors.secondary} name="eye-outline" size={14}/><AppText style={styles.readOnlyText}>READ ONLY</AppText></View></View>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rangeRail} contentContainerStyle={styles.ranges}>

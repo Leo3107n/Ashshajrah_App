@@ -1,3 +1,7 @@
+/**
+ * Root layout. Loads brand fonts, mounts global authentication state, and
+ * keeps the native splash visible until the application is ready.
+ */
 import { Slot } from "expo-router";
 import {
   PlayfairDisplay_600SemiBold,

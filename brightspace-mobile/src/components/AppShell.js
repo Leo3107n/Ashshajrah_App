@@ -1,3 +1,4 @@
+/** Shared protected-screen chrome with header, content, and role navigation. */
 import { StatusBar } from "expo-status-bar";
 import { StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";

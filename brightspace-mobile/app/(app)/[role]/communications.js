@@ -1,9 +1,13 @@
+/**
+ * Communications workspace for headlines, internal events, and note threads.
+ * Role checks preserve Admin read-only boundaries where required.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -161,7 +165,7 @@ export default function Communications() {
     }
   }
 
-  if (loading) return <View style={styles.center}><Ionicons color={colors.gold} name="chatbubbles-outline" size={34} /><AppText style={styles.loading}>Gathering communications...</AppText></View>;
+  if (loading) return <DashboardSkeleton message="Gathering communications..." />;
 
   const items = view === "headlines" ? headlines : view === "events" ? events : threads;
 

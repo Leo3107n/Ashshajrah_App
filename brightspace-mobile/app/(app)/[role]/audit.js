@@ -1,8 +1,12 @@
+/**
+ * Immutable Audit History. Server filters and local search feed a read-only
+ * detail sheet; no edit or deletion controls are exposed.
+ */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import api from "../../../src/api";
-import { AppText, Screen, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, Screen, SurfaceCard } from "../../../src/components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 function readable(value) { return String(value || "").replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase()); }
@@ -29,7 +33,7 @@ export default function AuditHistory() {
     const term = search.trim().toLowerCase();
     return term ? (data.items || []).filter((item) => [item.action, item.description, item.entity_type, item.actor_name, item.actor_email].some((value) => String(value || "").toLowerCase().includes(term))) : data.items || [];
   }, [data.items, search]);
-  if (loading) return <View style={styles.center}><Ionicons color={colors.gold} name="shield-checkmark-outline" size={34} /><AppText style={styles.loading}>Reviewing system history...</AppText></View>;
+  if (loading) return <DashboardSkeleton message="Reviewing system history..." />;
   return <Screen contentContainerStyle={styles.content} refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}>
     <View style={styles.headingRow}><View style={styles.headingBody}><AppText variant="display">Audit History</AppText><AppText style={styles.subtitle}>A traceable record of administrative system changes.</AppText></View><View style={styles.readOnly}><Ionicons color={colors.secondary} name="lock-closed-outline" size={13}/><AppText style={styles.readOnlyText}>READ ONLY</AppText></View></View>
     <View style={styles.stats}><Stat label="Matching" value={data.summary?.total} /><Stat label="Loaded" value={data.summary?.loaded} /></View>

@@ -1,3 +1,4 @@
+/** Reusable rounded content surface with optional brand elevation. */
 import { StyleSheet, View } from "react-native";
 import { colors, radius, shadows, space } from "../../theme";
 

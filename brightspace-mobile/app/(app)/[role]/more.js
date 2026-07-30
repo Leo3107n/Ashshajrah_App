@@ -1,9 +1,10 @@
+/** Administrative tool navigation with resilient independent summary counts. */
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { Pressable, RefreshControl, StyleSheet, View } from "react-native";
 import api from "../../../src/api";
-import { AppText, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -48,7 +49,7 @@ export default function AdminMore() {
   useEffect(() => { load(); }, [load]);
 
   if (loading) {
-    return <View style={styles.center}><Ionicons color={colors.gold} name="apps-outline" size={34} /><AppText style={styles.loadingText}>Preparing administrative tools...</AppText></View>;
+    return <DashboardSkeleton message="Preparing administrative tools..." />;
   }
 
   const sections = [

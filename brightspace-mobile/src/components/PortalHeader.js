@@ -1,5 +1,7 @@
-import { Image, StyleSheet, View } from "react-native";
-import { usePathname } from "expo-router";
+/** Role-aware header showing the brand, current section, and user actions. */
+import { Ionicons } from "@expo/vector-icons";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import { usePathname, useRouter } from "expo-router";
 import { colors, fonts, fontSize, shadows, space } from "../theme";
 import { useAuth } from "../context/AuthContext";
 import { sectionTitle } from "../navigation/roleNavigation";
@@ -7,6 +9,7 @@ import { AppText } from "./ui";
 
 export default function PortalHeader() {
   const pathname = usePathname();
+  const router = useRouter();
   const { role, user } = useAuth();
   const section = pathname.split("/").filter(Boolean).at(-1) || "dashboard";
   const initials = String(user?.name || user?.full_name || "A S")
@@ -18,9 +21,15 @@ export default function PortalHeader() {
         <Image source={require("../../assets/logo.webp")} style={styles.logo} resizeMode="contain" />
         <AppText numberOfLines={1} style={styles.title}>{sectionTitle(role, section)}</AppText>
       </View>
-      <View accessibilityLabel="Profile" style={styles.avatar}>
+      {role === "teacher" ? <Pressable accessibilityLabel="Notifications" onPress={() => router.push("/(app)/teacher/notifications")} style={styles.notification}><Ionicons color={colors.primary} name="notifications-outline" size={20}/></Pressable> : null}
+      <Pressable
+        accessibilityLabel="Open profile"
+        accessibilityRole="button"
+        onPress={() => router.push(`/(app)/${role}/profile`)}
+        style={styles.avatar}
+      >
         <AppText style={styles.initials}>{initials}</AppText>
-      </View>
+      </Pressable>
     </View>
   );
 }
@@ -30,6 +39,7 @@ const styles = StyleSheet.create({
   identity: { flex: 1, flexDirection: "row", alignItems: "center" },
   logo: { width: 34, height: 38, marginRight: space.sm },
   title: { flex: 1, color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
+  notification: { width: 38, height: 38, alignItems: "center", justifyContent: "center", marginRight: space.sm, borderRadius: 19, backgroundColor: colors.goldPale },
   avatar: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.secondaryContainer, borderRadius: 19, backgroundColor: colors.primaryContainer },
   initials: { color: colors.white, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
 });

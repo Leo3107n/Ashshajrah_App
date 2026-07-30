@@ -1,3 +1,7 @@
+/**
+ * Authenticated layout. Guards the protected route tree and wraps it with the
+ * shared header, safe-area treatment, and role navigation shell.
+ */
 import { Redirect, Slot } from "expo-router";
 import AppShell from "../../src/components/AppShell";
 import AuthGateScreen from "../../src/components/AuthGateScreen";
