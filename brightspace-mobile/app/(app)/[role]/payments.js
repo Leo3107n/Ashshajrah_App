@@ -47,6 +47,7 @@ export default function CoordinatorPayments() {
   const [filter, setFilter] = useState("all");
   const [data, setData] = useState({ counts: {}, items: [] });
   const [selected, setSelected] = useState(null);
+  const [credentials, setCredentials] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [acting, setActing] = useState(false);
@@ -75,10 +76,17 @@ export default function CoordinatorPayments() {
   async function verify(item, action, rejectionReason = "") {
     setActing(true);
     try {
-      await api.coordinator.payments.verify(item.id, { action, rejectionReason });
+      const response = await api.coordinator.payments.verify(item.id, { action, rejectionReason });
       setSelected(null);
       await load({ refresh: true });
-      Alert.alert(action === "approve" ? "Payment approved" : "Payment rejected", action === "approve" ? "The payment was verified successfully." : "The rejection decision was saved.");
+      // First-time admission approvals silently provision parent/student
+      // accounts; the generated credentials are only ever returned here, so
+      // they must be shown persistently rather than in a dismissible Alert.
+      if (action === "approve" && response?.credentials_email) {
+        setCredentials(response.credentials_email);
+      } else {
+        Alert.alert(action === "approve" ? "Payment approved" : "Payment rejected", action === "approve" ? "The payment was verified successfully." : "The rejection decision was saved.");
+      }
     } catch (nextError) {
       Alert.alert("Verification failed", nextError?.message || "Please try again.");
     } finally {
@@ -132,7 +140,47 @@ export default function CoordinatorPayments() {
       </Screen>
 
       <PaymentDetail acting={acting} item={selected} onApprove={approve} onClose={() => !acting && setSelected(null)} onReject={(item, reason) => verify(item, "reject", reason)} readOnly={readOnly} />
+      <CredentialsModal credentials={credentials} onClose={() => setCredentials(null)} />
     </>
+  );
+}
+
+function CredentialsModal({ credentials, onClose }) {
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={Boolean(credentials)}>
+      <View style={styles.credentialsOverlay}>
+        <SurfaceCard style={styles.credentialsCard}>
+          <Ionicons color={colors.secondary} name="key-outline" size={28} />
+          <AppText style={styles.credentialsTitle} variant="heading">Account Credentials Created</AppText>
+          <AppText style={styles.credentialsBody}>
+            Approving this admission voucher created parent and student portal accounts. Save these details now — they will not be shown again.
+          </AppText>
+          <View style={styles.credentialsBox}>
+            <AppText style={styles.credentialsLabel}>SENT TO</AppText>
+            <AppText selectable style={styles.credentialsValue}>{credentials?.recipient_email || "Not available"}</AppText>
+          </View>
+          {credentials?.subject ? (
+            <View style={styles.credentialsBox}>
+              <AppText style={styles.credentialsLabel}>SUBJECT</AppText>
+              <AppText selectable style={styles.credentialsValue}>{credentials.subject}</AppText>
+            </View>
+          ) : null}
+          {credentials?.body_text ? (
+            <View style={styles.credentialsBox}>
+              <AppText style={styles.credentialsLabel}>MESSAGE</AppText>
+              <AppText selectable style={styles.credentialsValue}>{credentials.body_text}</AppText>
+            </View>
+          ) : null}
+          {credentials?.parent_phone ? (
+            <View style={styles.credentialsBox}>
+              <AppText style={styles.credentialsLabel}>PARENT PHONE</AppText>
+              <AppText selectable style={styles.credentialsValue}>{credentials.parent_phone}</AppText>
+            </View>
+          ) : null}
+          <PillButton onPress={onClose} style={styles.credentialsClose}>I've Saved These Details</PillButton>
+        </SurfaceCard>
+      </View>
+    </Modal>
   );
 }
 
@@ -272,4 +320,12 @@ const styles = StyleSheet.create({
   reasonInput: { minHeight: 112, marginVertical: space.md, padding: space.md, borderWidth: 1, borderColor: colors.roseBorder, borderRadius: radius.lg, backgroundColor: colors.surface, color: colors.onSurface, fontFamily: fonts.body, fontSize: fontSize.sm, textAlignVertical: "top" },
   cancelReject: { minHeight: 42, alignItems: "center", justifyContent: "center", marginTop: space.sm },
   cancelText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
+  credentialsOverlay: { flex: 1, alignItems: "center", justifyContent: "center", padding: space.lg, backgroundColor: "rgba(0,39,30,0.55)" },
+  credentialsCard: { width: "100%", alignItems: "flex-start" },
+  credentialsTitle: { marginTop: space.sm, color: colors.primary },
+  credentialsBody: { marginTop: space.sm, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
+  credentialsBox: { width: "100%", marginTop: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  credentialsLabel: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
+  credentialsValue: { marginTop: 4, color: colors.onSurface, fontSize: fontSize.xs, lineHeight: 18 },
+  credentialsClose: { marginTop: space.lg, width: "100%" },
 });

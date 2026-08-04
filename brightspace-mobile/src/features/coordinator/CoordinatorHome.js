@@ -99,7 +99,10 @@ export default function CoordinatorHome() {
       <View style={styles.quickActions}>
         <QuickAction icon="person-add-outline" label="Admissions" onPress={() => router.push("/(app)/coordinator/admissions")} />
         <QuickAction icon="wallet-outline" label="Payments" onPress={() => router.push("/(app)/coordinator/payments")} />
-        <QuickAction icon="document-text-outline" label="Vouchers" onPress={() => router.push("/(app)/coordinator/payments")} />
+        <QuickAction icon="document-text-outline" label="Vouchers" onPress={() => router.push("/(app)/coordinator/vouchers")} />
+        <QuickAction icon="people-outline" label="Students & Parents" onPress={() => router.push("/(app)/coordinator/people")} />
+        <QuickAction icon="school-outline" label="Teachers" onPress={() => router.push("/(app)/coordinator/teachers")} />
+        <QuickAction icon="shield-checkmark-outline" label="Verifications" onPress={() => router.push("/(app)/coordinator/lecture-verifications")} />
       </View>
 
       <SectionTitle action="View All →" onPress={() => router.push("/(app)/coordinator/admissions")} title="Recent Admissions" />
@@ -182,8 +185,8 @@ const styles = StyleSheet.create({
   mintTone: { backgroundColor: "#DDF4EA" }, goldTone: { backgroundColor: colors.goldPale }, roseTone: { backgroundColor: colors.roseBg }, blueTone: { backgroundColor: colors.statusScheduledBg },
   statValue: { marginTop: space.sm, color: colors.primary, fontFamily: fonts.displayBold, fontSize: fontSize.xl },
   statLabel: { color: colors.onSurfaceVariant, fontFamily: fonts.bodyBold, fontSize: 10, textTransform: "uppercase" },
-  quickActions: { flexDirection: "row", gap: space.sm, marginTop: space.xl },
-  quick: { flex: 1, minHeight: 86, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
+  quickActions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginTop: space.xl },
+  quick: { width: "31%", minHeight: 86, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
   quickIcon: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.goldPale },
   quickLabel: { marginTop: space.xs, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: 10 },
   pressed: { opacity: 0.75, transform: [{ scale: 0.98 }] },

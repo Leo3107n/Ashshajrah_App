@@ -4,9 +4,9 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
+import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import api from "../../../src/api";
-import { AppText, DashboardSkeleton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
@@ -35,6 +35,7 @@ export default function AdmissionReview() {
   const [data, setData] = useState({ records: [], interviews: [], scholarships: [] });
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
+  const [creatingVoucher, setCreatingVoucher] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -62,6 +63,24 @@ export default function AdmissionReview() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  async function createVoucher(item) {
+    setCreatingVoucher(true);
+    try {
+      await api.coordinator.feeVouchers.create({
+        registration_lead_id: item.registration_id,
+        scholarship_amount: item.scholarship_amount || item.requested_amount,
+        scholarship_form_id: item.id,
+      });
+      setSelected(null);
+      await load({ refresh: true });
+      Alert.alert("Voucher created", "A fee voucher was generated and emailed to the family.");
+    } catch (nextError) {
+      Alert.alert("Unable to create voucher", nextError?.message || "Please try again.");
+    } finally {
+      setCreatingVoucher(false);
+    }
+  }
 
   const items = useMemo(() => {
     const source = data[view] || [];
@@ -97,7 +116,13 @@ export default function AdmissionReview() {
         </View>
       </Screen>
 
-      <ReviewDetail onClose={() => setSelected(null)} selection={selected} />
+      <ReviewDetail
+        creatingVoucher={creatingVoucher}
+        isAdmin={isAdmin}
+        onClose={() => setSelected(null)}
+        onCreateVoucher={createVoucher}
+        selection={selected}
+      />
     </>
   );
 }
@@ -119,9 +144,10 @@ function ReviewCard({ item, onPress, view }) {
   );
 }
 
-function ReviewDetail({ onClose, selection }) {
+function ReviewDetail({ creatingVoucher, isAdmin, onClose, onCreateVoucher, selection }) {
   if (!selection) return null;
   const { item, view } = selection;
+  const canCreateVoucher = view === "scholarships" && !isAdmin && !item.voucher_created;
   const title = item.student_name || item.child_name || item.parent_name || "Admission record";
   const rows = view === "records"
     ? [
@@ -160,6 +186,16 @@ function ReviewDetail({ onClose, selection }) {
             <StatusChip tone={statusTone(item.status)}>{readable(item.status || "submitted")}</StatusChip>
             <SurfaceCard style={styles.details}>{rows.map(([label, value]) => <DetailRow key={label} label={label} value={value} />)}</SurfaceCard>
             {view === "interviews" && item.responses ? <ResponseBlock responses={item.responses} /> : null}
+            {canCreateVoucher ? (
+              <PillButton
+                disabled={creatingVoucher}
+                loading={creatingVoucher}
+                onPress={() => onCreateVoucher(item)}
+                style={styles.voucherButton}
+              >
+                Create Fee Voucher
+              </PillButton>
+            ) : null}
             <View style={styles.locked}><Ionicons color={colors.secondary} name="lock-closed-outline" size={19} /><AppText style={styles.lockedText}>This screen records review visibility only. Final decisions and account provisioning are protected Super Admin operations.</AppText></View>
           </ScrollView>
         </View>
@@ -218,6 +254,7 @@ const styles = StyleSheet.create({
   detailRow: { minHeight: 52, paddingVertical: space.sm, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   detailLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
   detailValue: { marginTop: 3, color: colors.onSurface, fontFamily: fonts.bodySemibold, fontSize: fontSize.sm },
+  voucherButton: { marginTop: space.lg },
   responseCard: { marginTop: space.md },
   responseTitle: { marginBottom: space.sm, color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   locked: { flexDirection: "row", marginTop: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },

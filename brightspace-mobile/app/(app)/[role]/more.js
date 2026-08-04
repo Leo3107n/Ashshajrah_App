@@ -25,8 +25,9 @@ export default function AdminMore() {
         api.coordinator.parentInterviewForms(),
         api.coordinator.scholarships(),
         api.admin.auditLogs(),
+        api.admin.careerApplications.list(),
       ]);
-      const [leads, forms, scholarships, audits] = results.map((result) =>
+      const [leads, forms, scholarships, audits, careers] = results.map((result) =>
         result.status === "fulfilled" ? result.value : null
       );
       setCounts({
@@ -34,6 +35,7 @@ export default function AdminMore() {
         interviews: forms?.items?.length || 0,
         scholarships: scholarships?.items?.length || 0,
         audits: audits?.summary?.total ?? audits?.items?.length ?? 0,
+        careers: careers?.items?.length || 0,
       });
       if (results.some((result) => result.status === "rejected")) {
         setError("Some summary counts are temporarily unavailable.");
@@ -58,6 +60,7 @@ export default function AdminMore() {
     ["communications", "Communications", "Manage internal events, notes, and portal headlines.", "chatbubbles-outline", null, "gold"],
     ["reports", "Reports & Insights", "Review enrollment, finance, attendance, and lecture trends.", "bar-chart-outline", null, "blue"],
     ["audit", "Audit History", "Trace administrative actions and system changes.", "shield-checkmark-outline", counts.audits, "rose"],
+    ["career-applications", "Careers Applications", "Review candidates who applied through the careers form.", "briefcase-outline", counts.careers, "blue"],
     ["profile", "Account & Security", "Profile, secure session details, and logout.", "person-circle-outline", null, "mint"],
   ];
 

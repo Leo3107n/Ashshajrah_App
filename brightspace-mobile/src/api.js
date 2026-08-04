@@ -531,6 +531,7 @@ export const studentApi = {
   dashboard: (query) => get("/api/student/dashboard", query),
   classes: (query) => get("/api/student/classes", query),
   attendance: (query) => get("/api/student/attendance", query),
+  progressReports: (query) => get("/api/student/progress-reports", query),
   fees: (query) => get("/api/student/fees", query),
   timeline: (query) => get("/api/student/timeline", query),
   calendar: (query) => get("/api/student/calendar", query),

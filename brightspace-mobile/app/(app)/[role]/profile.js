@@ -5,6 +5,8 @@ import { Alert, StyleSheet, View } from "react-native";
 import { AppText, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import TeacherProfile from "../../../src/features/teacher/TeacherProfile";
+import StudentProfile from "../../../src/features/student/StudentProfile";
+import ParentProfile from "../../../src/features/parent/ParentProfile";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
 
 function displayName(user) {
@@ -41,6 +43,8 @@ export default function ProfileScreen() {
   // Teacher has a dedicated professional profile and assignment view. Other
   // roles retain the shared identity/session screen below.
   if (role === "teacher") return <TeacherProfile />;
+  if (role === "student") return <StudentProfile />;
+  if (role === "parent") return <ParentProfile />;
 
   function confirmLogout() {
     Alert.alert("Log out?", "You will need to sign in again to access your portal.", [
