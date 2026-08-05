@@ -67,6 +67,10 @@ export default function ParentLectures() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setSelected(null);
+  }, [childId, filter, subjectId]);
+
   const visible = useMemo(
     () =>
       data.items.filter((item) => {
@@ -260,3 +264,4 @@ const styles = StyleSheet.create({
   meetRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.lg, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
   meetText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
 });
+

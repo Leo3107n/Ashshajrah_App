@@ -50,6 +50,14 @@ function attendanceTone(value) {
   return "danger";
 }
 
+function childDisplayName(child) {
+  return String(child?.full_name || child?.name || "Child").trim();
+}
+
+function childLectures(child) {
+  return Array.isArray(child?.today_lectures) ? child.today_lectures : [];
+}
+
 export default function ParentHome() {
   const router = useRouter();
   const { user } = useAuth();
@@ -144,7 +152,7 @@ export default function ParentHome() {
         data.children.map((child) => (
           <ChildCard
             child={child}
-            key={child.id}
+            key={child.id || childDisplayName(child)}
             onCalendar={() => router.push("/(app)/parent/calendar")}
             onFees={() => router.push("/(app)/parent/fees")}
           />
@@ -235,13 +243,15 @@ function ChildCard({ child, onCalendar, onFees }) {
   const attendancePct = Number(child.attendance_percentage || 0);
   const pendingHomework = Number(child.pending_homeworks || 0);
   const feeStatus = String(child.fee_status || "").toLowerCase();
+  const displayName = childDisplayName(child);
+  const lectures = childLectures(child);
 
   const nextLecture = useMemo(
     () =>
-      (child.today_lectures || []).find((item) =>
+      lectures.find((item) =>
         ["live", "upcoming", "scheduled"].includes(String(item.display_status || item.status).toLowerCase())
-      ) || (child.today_lectures || [])[0],
-    [child.today_lectures]
+      ) || lectures[0],
+    [lectures]
   );
 
   return (
@@ -250,16 +260,16 @@ function ChildCard({ child, onCalendar, onFees }) {
       <View style={styles.childHeader}>
         <View style={styles.childAvatar}>
           <AppText style={styles.childInitial}>
-            {String(child.full_name || child.name || "C")[0].toUpperCase()}
+            {displayName[0].toUpperCase()}
           </AppText>
         </View>
         <View style={styles.childCopy}>
-          <AppText style={styles.childName}>{child.full_name || child.name}</AppText>
+          <AppText style={styles.childName}>{displayName}</AppText>
           <AppText style={styles.childClass}>
             {child.course_title || child.class_level || "Enrolled student"}
           </AppText>
         </View>
-        <StatusChip tone={feeStatus === "paid" || feeStatus === "verified" ? "success" : feeStatus === "overdue" ? "danger" : "warning"}>
+        <StatusChip tone={feeTone(feeStatus)}>
           {child.fee_status_label || readable(feeStatus) || "Fees"}
         </StatusChip>
       </View>

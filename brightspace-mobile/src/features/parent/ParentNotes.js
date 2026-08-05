@@ -49,7 +49,7 @@ export default function ParentNotes() {
       setData({
         notes: timeline?.notes || [],
         threads: threads?.items || [],
-        children: timeline?.children || data.children,
+        children: timeline?.children || [],
       });
     } catch (nextError) {
       setError(nextError?.message || "Unable to load communications.");
@@ -63,6 +63,10 @@ export default function ParentNotes() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    setSelectedThread(null);
+  }, [childId]);
 
   if (loading) return <DashboardSkeleton message="Opening communications..." />;
 

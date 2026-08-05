@@ -565,7 +565,10 @@ export const parentApi = {
   attendance: (query) => get("/api/parent/attendance", query),
   homework: (query) => get("/api/parent/homework", query),
   fees: (query) => get("/api/parent/fees", query),
-  profile: (query) => get("/api/parent/profile", query),
+  profile: {
+    get: (query) => get("/api/parent/profile", query),
+    update: (data) => patch("/api/parent/profile", data),
+  },
   timeline: (query) => get("/api/parent/timeline", query),
 };
 

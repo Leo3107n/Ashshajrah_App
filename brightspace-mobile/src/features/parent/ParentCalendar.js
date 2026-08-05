@@ -78,6 +78,10 @@ export default function ParentCalendar() {
 
   useEffect(() => { load(); }, [load]);
 
+  useEffect(() => {
+    setSelectedLecture(null);
+  }, [selectedDate, childFilter, subjectFilter]);
+
   const marks = Object.fromEntries(
     (data.markedDates || []).map((item) => [
       item.date || item,

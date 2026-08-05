@@ -75,6 +75,10 @@ export default function ParentHomework() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setSelected(null);
+  }, [childId, filter]);
+
   const summary = useMemo(
     () => ({
       total: data.items.length,
@@ -270,3 +274,4 @@ const styles = StyleSheet.create({
   detailLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
   detailValue: { marginTop: 3, color: colors.onSurface, fontSize: fontSize.xs, lineHeight: 18 },
 });
+

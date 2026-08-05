@@ -59,6 +59,10 @@ export default function ParentTimeline() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    setSelected(null);
+  }, [childId, type]);
+
   const types = useMemo(
     () => [...new Set(data.items.map((item) => item.type || item.event_type).filter(Boolean))],
     [data.items]
@@ -224,3 +228,4 @@ const styles = StyleSheet.create({
   detailLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
   detailValue: { marginTop: 3, color: colors.onSurface, fontSize: fontSize.xs, lineHeight: 18 },
 });
+

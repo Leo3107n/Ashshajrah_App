@@ -40,6 +40,11 @@ function initials(value) {
     .toUpperCase();
 }
 
+function isValidPhone(value) {
+  const cleaned = String(value || "").replace(/\D/g, "");
+  return !cleaned || (cleaned.length >= 7 && cleaned.length <= 20);
+}
+
 export default function ParentProfile() {
   const { isAuthenticating, logout, role, updateSessionUser } = useAuth();
   const [profile, setProfile] = useState(null);
@@ -55,7 +60,7 @@ export default function ParentProfile() {
     setError("");
     try {
       const [profileData, childData] = await Promise.all([
-        api.parent.profile(),
+        api.parent.profile.get(),
         api.parent.children(),
       ]);
       setProfile(profileData?.profile || null);
@@ -80,22 +85,32 @@ export default function ParentProfile() {
   }
 
   async function save() {
-    if (!form.fullName.trim()) {
+    const nextFullName = String(form?.fullName || "").trim();
+    const nextPhone = String(form?.phone || "").trim();
+
+    if (!nextFullName) {
       Alert.alert("Full name required", "Enter your full name before saving.");
+      return;
+    }
+    if (!isValidPhone(nextPhone)) {
+      Alert.alert("Invalid phone number", "Enter a valid phone number before saving.");
       return;
     }
     setSaving(true);
     try {
-      // Call parent profile update — adapt to match actual API signature
-      const result = await api.parent.profile({
-        fullName: form.fullName.trim(),
-        phone: form.phone.trim(),
+      const result = await api.parent.profile.update({
+        fullName: nextFullName,
+        phone: nextPhone,
       });
+      const updatedProfile = result?.profile || {};
       updateSessionUser({
-        name: form.fullName.trim(),
-        full_name: form.fullName.trim(),
-        phone: form.phone.trim(),
+        name: updatedProfile.full_name || nextFullName,
+        full_name: updatedProfile.full_name || nextFullName,
+        email: updatedProfile.email || profile?.email || "",
+        phone: updatedProfile.phone || nextPhone,
+        status: updatedProfile.status || profile?.status,
       });
+      setProfile(updatedProfile.full_name ? updatedProfile : profile);
       setForm(null);
       Alert.alert(
         "Profile updated",
@@ -412,3 +427,4 @@ const styles = StyleSheet.create({
   errorBody: { marginTop: space.sm, color: colors.onSurfaceVariant },
   retry: { marginTop: space.lg },
 });
+
