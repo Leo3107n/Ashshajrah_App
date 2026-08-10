@@ -112,9 +112,26 @@ export default function ParentTimeline() {
           </SurfaceCard>
         ) : visible.length ? (
           <View style={styles.rail}>
-            {visible.map((item, index) => (
-              <TimelineRow isLast={index === visible.length - 1} item={item} key={item.id || index} onPress={() => setSelected(item)} />
-            ))}
+            {visible.map((item, index) => {
+              // Timeline unions can contain several events for the same entity,
+              // so an entity id alone is not unique. Include event identity and
+              // occurrence time, with the response position as a final tie-breaker.
+              const eventKey = [
+                item.id || "event",
+                item.type || item.event_type || "update",
+                item.created_at || item.occurred_at || item.date || "undated",
+                index,
+              ].join(":");
+
+              return (
+                <TimelineRow
+                  isLast={index === visible.length - 1}
+                  item={item}
+                  key={eventKey}
+                  onPress={() => setSelected(item)}
+                />
+              );
+            })}
           </View>
         ) : (
           <SurfaceCard style={styles.state}>

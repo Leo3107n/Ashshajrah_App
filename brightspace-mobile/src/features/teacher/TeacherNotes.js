@@ -104,7 +104,7 @@ export default function TeacherNotes() {
   }
 
   function newThread() {
-    setForm({ kind: "thread", lectureId: "", message: "", visibility: "parent" });
+    setForm({ kind: "thread", lectureId: "", studentId: "", message: "", visibility: "parent" });
   }
 
   async function saveNote() {
@@ -148,15 +148,17 @@ export default function TeacherNotes() {
 
   async function createThread() {
     const lecture = lectures.find((item) => item.id === form.lectureId);
-    if (!lecture || !form.message.trim()) {
-      Alert.alert("Details required", "Select an assigned class and enter the first message.");
+    if (!lecture || !form.studentId || !form.message.trim()) {
+      Alert.alert("Details required", "Select the student who should receive this conversation and enter the first message.");
       return;
     }
     setSaving(true);
     try {
       const result = await api.shared.notes.createThread({
+        lectureId: lecture.id,
         classLevel: lecture.class_level || lecture.course_title,
         subjectId: lecture.subject_id,
+        studentId: form.studentId,
         visibility: form.visibility,
         message: form.message.trim(),
       });
@@ -229,6 +231,7 @@ function Editor({ eligibleStudents, form, lectures, onChange, onClose, onDelete,
     {!editing ? <><Label>{isNote ? "Lecture Context" : "Class and Subject"}</Label><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>{lectures.map((item) => <Choice active={form?.lectureId === item.id} key={item.id} label={`${item.subject_name || item.title} · ${item.class_level || item.course_title}`} onPress={() => onChange({ ...form, lectureId: item.id, studentId: "" })}/>)}</ScrollView></> : null}
     <Label>Visibility</Label><View style={styles.visibility}>{(isNote ? NOTE_VISIBILITY : THREAD_VISIBILITY).map(([value, label]) => <Choice active={form?.visibility === value} key={value} label={label} onPress={() => onChange({ ...form, visibility: value, studentId: value === "teacher_only" ? "" : form.studentId, targetAll: value === "teacher_only" ? false : form.targetAll })}/>)}</View>
     {isNote && !editing && form?.lectureId && form.visibility !== "teacher_only" ? <><Label>Recipients</Label><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}><Choice active={form.targetAll} label={`All Students (${eligibleStudents.length})`} onPress={() => onChange({ ...form, targetAll: true, studentId: "" })}/>{eligibleStudents.map((item) => <Choice active={!form.targetAll && form.studentId === item.id} key={item.id} label={item.full_name} onPress={() => onChange({ ...form, targetAll: false, studentId: item.id })}/>)}</ScrollView>{!eligibleStudents.length ? <AppText style={styles.hint}>No active students match this lecture assignment.</AppText> : <AppText style={styles.hintNeutral}>{form.visibility === "parent" ? "The note will be shared with the selected students’ parents." : "Choose one learner or the entire class."}</AppText>}</> : null}
+    {!isNote && !editing && form?.lectureId ? <><Label>Recipient Student</Label><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rail}>{eligibleStudents.map((item) => <Choice active={form.studentId === item.id} key={item.id} label={item.full_name} onPress={() => onChange({ ...form, studentId: item.id })}/>)}</ScrollView>{!eligibleStudents.length ? <AppText style={styles.hint}>No active students match this lecture assignment.</AppText> : <AppText style={styles.hintNeutral}>{form.visibility === "parent" ? "Only the selected student's parents will see this conversation." : "Only the selected student will see this conversation."}</AppText>}</> : null}
     <Label>{isNote ? "Observation" : "First Message"}</Label><TextInput maxLength={2000} multiline onChangeText={(text) => onChange({ ...form, [isNote ? "note" : "message"]: text })} placeholder={isNote ? "Record a helpful student observation" : "Write a message for this class"} placeholderTextColor={colors.outline} style={styles.textarea} textAlignVertical="top" value={isNote ? form?.note : form?.message}/>
     <PillButton disabled={saving} loading={saving} onPress={onSave} style={styles.save}>{editing ? "Save Changes" : isNote ? "Save Note" : "Start Conversation"}</PillButton>
     {editing ? <PillButton disabled={saving} onPress={onDelete} style={styles.delete} variant="outline">Delete Note</PillButton> : null}

@@ -67,6 +67,8 @@ function labelFor(state) {
 
 export default function ParentFees() {
   const [items, setItems] = useState([]);
+  const [children, setChildren] = useState([]);
+  const [childId, setChildId] = useState("");
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -77,17 +79,22 @@ export default function ParentFees() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const response = await api.parent.fees();
+      const response = await api.parent.fees({ childId: childId || undefined });
       setItems(response?.items || []);
+      setChildren(response?.children || []);
     } catch (nextError) {
       setError(nextError?.message || "Unable to load fee records.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [childId]);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    setSelected(null);
+  }, [childId, filter]);
 
   const summary = useMemo(
     () =>
@@ -146,6 +153,24 @@ export default function ParentFees() {
         <AppText style={styles.subtitle}>
           Track fee vouchers and payment status for your children.
         </AppText>
+
+        {children.length > 1 ? (
+          <ScrollView
+            contentContainerStyle={styles.childFilters}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            <Filter active={!childId} label="All Children" onPress={() => setChildId("")} />
+            {children.map((child) => (
+              <Filter
+                active={childId === child.id}
+                key={child.id}
+                label={child.full_name || child.name}
+                onPress={() => setChildId(child.id)}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
 
         {/* Balance hero */}
         <View style={styles.hero}>
@@ -492,6 +517,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.1 },
   subtitle: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   hero: { marginTop: space.lg, padding: space.lg, borderRadius: radius["2xl"], backgroundColor: colors.primary },
+  childFilters: { gap: space.sm, paddingTop: space.lg },
   heroLabel: { color: "#B9EEDB", fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1 },
   heroValue: { marginTop: space.xs, color: colors.white, fontFamily: fonts.displayBold, fontSize: 30, lineHeight: 42 },
   heroFooter: { flexDirection: "row", marginTop: space.lg, paddingTop: space.md, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.15)" },

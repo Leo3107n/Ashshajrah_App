@@ -15,6 +15,7 @@
  */
 
 import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 import { Platform } from "react-native";
 
 const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL;
@@ -22,6 +23,42 @@ const configuredBaseUrl = process.env.EXPO_PUBLIC_API_URL;
 export const API_BASE_URL = String(configuredBaseUrl || "")
   .trim()
   .replace(/\/+$/, "");
+
+function detectExpoHostBaseUrl() {
+  const hostUri =
+    Constants?.expoConfig?.hostUri ||
+    Constants?.expoGoConfig?.hostUri ||
+    Constants?.manifest2?.extra?.expoClient?.hostUri ||
+    Constants?.manifest?.debuggerHost ||
+    "";
+
+  const host = String(hostUri || "")
+    .trim()
+    .replace(/^exp(s)?:\/\//i, "")
+    .replace(/^https?:\/\//i, "")
+    .split(/[/?#]/, 1)[0];
+
+  if (!host) return "";
+
+  const hostname = host.includes(":") ? host.split(":")[0] : host;
+  if (!hostname || hostname === "localhost" || hostname === "127.0.0.1") return "";
+
+  // Keep Expo's detected host fallback on the same port as the configured API.
+  // Next may select 3001 when another process already owns its default port.
+  let configuredPort = "3000";
+  try {
+    configuredPort = new URL(API_BASE_URL).port || "3000";
+  } catch {
+    // An invalid/missing configured URL is reported by the request layer.
+  }
+
+  return `http://${hostname}:${configuredPort}`;
+}
+
+function candidateBaseUrls() {
+  const urls = [API_BASE_URL, detectExpoHostBaseUrl()].filter(Boolean);
+  return [...new Set(urls)];
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const unauthorizedListeners = new Set();
@@ -115,6 +152,28 @@ export class ApiError extends Error {
     this.url = options.url ?? "";
     this.isNetworkError = Boolean(options.isNetworkError);
   }
+}
+
+async function fetchWithFallback(path, options = {}) {
+  let lastError = null;
+
+  for (const baseUrl of candidateBaseUrls()) {
+    const url = `${baseUrl}${withQuery(path, options.query)}`;
+    try {
+      const response = await fetch(url, {
+        method: options.method || "GET",
+        headers: options.headers,
+        body: options.body,
+        credentials: "include",
+        signal: options.signal,
+      });
+      return { response, url };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError;
 }
 
 /**
@@ -254,7 +313,9 @@ export async function request(path, options = {}) {
     signal,
   } = options;
 
-  const url = `${API_BASE_URL}${withQuery(path, query)}`;
+  const fallbackUrl = candidateBaseUrls()[0]
+    ? `${candidateBaseUrls()[0]}${withQuery(path, query)}`
+    : "";
   const controller = new AbortController();
   let didTimeout = false;
   const timer = setTimeout(() => {
@@ -285,12 +346,12 @@ export async function request(path, options = {}) {
   }
 
   try {
-    const response = await fetch(url, {
+    const { response, url } = await fetchWithFallback(path, {
       method,
       headers,
       body: requestBody,
-      credentials: "include",
       signal: controller.signal,
+      query,
     });
     rememberResponseCookies(response);
     const data = await parseResponse(response, responseType);
@@ -322,7 +383,7 @@ export async function request(path, options = {}) {
         didTimeout ? "The request timed out. Please try again." : "The request was cancelled.",
         {
           code: didTimeout ? "REQUEST_TIMEOUT" : "REQUEST_CANCELLED",
-          url,
+          url: fallbackUrl,
           isNetworkError: didTimeout,
         }
       );
@@ -333,7 +394,7 @@ export async function request(path, options = {}) {
       {
         code: "NETWORK_ERROR",
         data: error,
-        url,
+        url: fallbackUrl,
         isNetworkError: true,
       }
     );
