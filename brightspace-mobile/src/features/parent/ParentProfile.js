@@ -64,7 +64,10 @@ export default function ParentProfile() {
         api.parent.children(),
       ]);
       setProfile(profileData?.profile || null);
-      setChildren(childData?.items || []);
+      // The Parent children endpoint returns { children }, not { items }.
+      // Read the contract directly so linked student cards render correctly
+      // for both single-child and multi-child parent accounts.
+      setChildren(childData?.children || []);
     } catch (nextError) {
       setError(nextError?.message || "Unable to load your profile.");
     } finally {
