@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 const FILTERS = [
@@ -79,24 +81,38 @@ export default function ParentHomework() {
     setSelected(null);
   }, [childId, filter]);
 
+  useEffect(() => {
+    if (data.children.length === 1) {
+      setChildId(data.children[0]?.id || "");
+      return;
+    }
+    if (childId && data.children.some((child) => child.id === childId)) return;
+    setChildId("");
+  }, [childId, data.children]);
+
+  const requiresChildSelection = data.children.length > 1 && !childId;
+
   const summary = useMemo(
     () => ({
-      total: data.items.length,
-      pending: data.items.filter((item) => normalized(item.status) === "pending").length,
-      submitted: data.items.filter((item) => normalized(item.status) === "submitted").length,
-      overdue: data.items.filter(isOverdue).length,
+      total: requiresChildSelection ? 0 : data.items.length,
+      pending: requiresChildSelection ? 0 : data.items.filter((item) => normalized(item.status) === "pending").length,
+      submitted: requiresChildSelection ? 0 : data.items.filter((item) => normalized(item.status) === "submitted").length,
+      overdue: requiresChildSelection ? 0 : data.items.filter(isOverdue).length,
     }),
-    [data.items]
+    [data.items, requiresChildSelection]
   );
 
   const visible = useMemo(
     () =>
+      requiresChildSelection
+        ? []
+        :
       data.items.filter((item) => {
         if (filter === "overdue") return isOverdue(item);
         if (filter === "all") return true;
         return normalized(item.status) === filter;
       }),
-    [filter, data.items]
+    [filter, data.items, requiresChildSelection]
   );
 
   if (loading) return <DashboardSkeleton message="Gathering homework..." />;
@@ -114,12 +130,13 @@ export default function ParentHomework() {
         </View>
 
         {data.children.length > 1 ? (
-          <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
-            <Filter active={!childId} label="All Children" onPress={() => setChildId("")} />
-            {data.children.map((child) => (
-              <Filter active={childId === child.id} key={child.id} label={child.full_name || child.name} onPress={() => setChildId(child.id)} />
-            ))}
-          </ScrollView>
+          <ChildDropdown
+            children={data.children}
+            label="SELECT CHILD"
+            onChange={setChildId}
+            placeholder="Choose a child to view homework"
+            selectedId={childId}
+          />
         ) : null}
 
         <View style={styles.summary}>
@@ -141,6 +158,8 @@ export default function ParentHomework() {
             <AppText style={styles.errorText}>{error}</AppText>
             <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
           </SurfaceCard>
+        ) : requiresChildSelection ? (
+          <ChildSelectionState message="Choose a child from the dropdown to view that child’s homework." />
         ) : visible.length ? (
           visible.map((item) => <HomeworkCard item={item} key={item.id} onPress={() => setSelected(item)} />)
         ) : (

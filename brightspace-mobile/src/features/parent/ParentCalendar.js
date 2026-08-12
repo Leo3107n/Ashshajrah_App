@@ -17,6 +17,8 @@ import {
   StatusChip,
   SurfaceCard,
 } from "../../components/ui";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 
 function localDateKey(date = new Date()) {
@@ -82,6 +84,17 @@ export default function ParentCalendar() {
     setSelectedLecture(null);
   }, [selectedDate, childFilter, subjectFilter]);
 
+  useEffect(() => {
+    if (data.children.length === 1) {
+      setChildFilter(data.children[0]?.id || "");
+      return;
+    }
+    if (childFilter && data.children.some((child) => child.id === childFilter)) return;
+    setChildFilter("");
+  }, [childFilter, data.children]);
+
+  const requiresChildSelection = data.children.length > 1 && !childFilter;
+
   const marks = Object.fromEntries(
     (data.markedDates || []).map((item) => [
       item.date || item,
@@ -115,7 +128,7 @@ export default function ParentCalendar() {
           <AppText style={styles.eyebrow}>CLASS SCHEDULE</AppText>
           <AppText variant="display">Learning Calendar</AppText>
           <AppText style={styles.subtitle}>
-            Select a date to view your children's scheduled classes.
+            Select a date to view your child&apos;s scheduled classes.
           </AppText>
         </View>
 
@@ -140,25 +153,13 @@ export default function ParentCalendar() {
 
         {/* Child filter */}
         {data.children.length > 1 ? (
-          <ScrollView
-            contentContainerStyle={styles.filters}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-          >
-            <FilterChip
-              active={!childFilter}
-              label="All Children"
-              onPress={() => setChildFilter("")}
-            />
-            {data.children.map((child) => (
-              <FilterChip
-                active={childFilter === child.id}
-                key={child.id}
-                label={child.full_name || child.name}
-                onPress={() => setChildFilter(child.id)}
-              />
-            ))}
-          </ScrollView>
+          <ChildDropdown
+            children={data.children}
+            label="SELECT CHILD"
+            onChange={setChildFilter}
+            placeholder="Choose a child to view class schedule"
+            selectedId={childFilter}
+          />
         ) : null}
 
         {/* Subject filter */}
@@ -186,7 +187,7 @@ export default function ParentCalendar() {
 
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Classes</AppText>
-          <AppText style={styles.count}>{data.items.length} scheduled</AppText>
+          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled</AppText>
         </View>
 
         {error ? (
@@ -195,6 +196,8 @@ export default function ParentCalendar() {
             <AppText style={styles.errorText}>{error}</AppText>
             <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
           </SurfaceCard>
+        ) : requiresChildSelection ? (
+          <ChildSelectionState message="Choose a child from the dropdown to view that child’s class schedule." />
         ) : data.items.length ? (
           data.items.map((item) => (
             <LectureRow

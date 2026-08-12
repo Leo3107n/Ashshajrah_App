@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 const STATUS_FILTERS = ["all", "present", "partial", "absent"];
@@ -63,18 +65,32 @@ export default function ParentAttendance() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (data.children.length === 1) {
+      setChildId(data.children[0]?.id || "");
+      return;
+    }
+    if (childId && data.children.some((child) => child.id === childId)) return;
+    setChildId("");
+  }, [childId, data.children]);
+
+  const requiresChildSelection = data.children.length > 1 && !childId;
+
   const subjects = useMemo(
     () => [...new Set(data.items.map((item) => item.subject_name).filter(Boolean))].sort(),
     [data.items]
   );
   const visible = useMemo(
     () =>
+      requiresChildSelection
+        ? []
+        :
       data.items.filter(
         (item) =>
           (!subject || item.subject_name === subject) &&
           (status === "all" || normalized(item.attendance_status || item.status) === status)
       ),
-    [data.items, status, subject]
+    [data.items, requiresChildSelection, status, subject]
   );
 
   if (loading) return <DashboardSkeleton message="Reviewing attendance..." />;
@@ -108,12 +124,13 @@ export default function ParentAttendance() {
       </SurfaceCard>
 
       {data.children.length > 1 ? (
-        <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
-          <Filter active={!childId} label="All Children" onPress={() => setChildId("")} />
-          {data.children.map((child) => (
-            <Filter active={childId === child.id} key={child.id} label={child.full_name || child.name} onPress={() => setChildId(child.id)} />
-          ))}
-        </ScrollView>
+        <ChildDropdown
+          children={data.children}
+          label="SELECT CHILD"
+          onChange={setChildId}
+          placeholder="Choose a child to view attendance"
+          selectedId={childId}
+        />
       ) : null}
 
       <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
@@ -130,7 +147,7 @@ export default function ParentAttendance() {
 
       <View style={styles.sectionHeader}>
         <AppText style={styles.sectionTitle}>Attendance History</AppText>
-        <AppText style={styles.count}>{visible.length} records</AppText>
+        <AppText style={styles.count}>{requiresChildSelection ? 0 : visible.length} records</AppText>
       </View>
 
       {error ? (
@@ -139,6 +156,8 @@ export default function ParentAttendance() {
           <AppText style={styles.errorText}>{error}</AppText>
           <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
         </SurfaceCard>
+      ) : requiresChildSelection ? (
+        <ChildSelectionState message="Choose a child from the dropdown to view that child’s attendance." />
       ) : visible.length ? (
         visible.map((item) => <AttendanceRow item={item} key={item.id} />)
       ) : (

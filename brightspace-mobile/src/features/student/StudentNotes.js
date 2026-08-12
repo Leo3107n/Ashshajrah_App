@@ -1,19 +1,16 @@
 /**
- * Student Notes and Communications. Teacher notes remain read-only while
- * Student-visible learning threads support scoped conversation and replies.
+ * Student Notes and Communications. This screen is intentionally read-only for
+ * learners: students can only view teacher notes and student-targeted message
+ * threads that already belong to them, without any compose or reply actions.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
-  KeyboardAvoidingView,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
 import api from "../../api";
@@ -48,9 +45,8 @@ function dateTime(value) {
 
 export default function StudentNotes() {
   const [tab, setTab] = useState("notes");
-  const [data, setData] = useState({ notes: [], threads: [], classes: [] });
+  const [data, setData] = useState({ notes: [], threads: [] });
   const [selectedThread, setSelectedThread] = useState(null);
-  const [composeOpen, setComposeOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -59,15 +55,13 @@ export default function StudentNotes() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const [timeline, threads, classes] = await Promise.all([
+      const [timeline, threads] = await Promise.all([
         api.student.timeline({ range: "all" }),
         api.shared.notes.threads(),
-        api.student.classes(),
       ]);
       setData({
         notes: timeline?.notes || [],
         threads: threads?.items || [],
-        classes: classes?.items || [],
       });
     } catch (nextError) {
       setError(nextError?.message || "Unable to load communications.");
@@ -80,16 +74,6 @@ export default function StudentNotes() {
   useEffect(() => {
     load();
   }, [load]);
-
-  const contacts = useMemo(
-    () =>
-      data.classes.flatMap((course) =>
-        course.subjects
-          .filter((subject) => subject.teacher_id)
-          .map((subject) => ({ course, subject }))
-      ),
-    [data.classes]
-  );
 
   if (loading) return <DashboardSkeleton message="Opening communications..." />;
 
@@ -110,7 +94,7 @@ export default function StudentNotes() {
           <AppText style={styles.eyebrow}>STAY CONNECTED</AppText>
           <AppText variant="display">Notes & Messages</AppText>
           <AppText style={styles.subtitle}>
-            Read teacher feedback and discuss your enrolled subjects.
+            Read teacher feedback and messages shared with you.
           </AppText>
         </View>
 
@@ -126,7 +110,7 @@ export default function StudentNotes() {
             active={tab === "messages"}
             count={data.threads.length}
             icon="chatbubbles-outline"
-            label="Conversations"
+            label="Messages"
             onPress={() => setTab("messages")}
           />
         </View>
@@ -141,50 +125,26 @@ export default function StudentNotes() {
           </SurfaceCard>
         ) : tab === "notes" ? (
           <NotesList items={data.notes} />
+        ) : data.threads.length ? (
+          data.threads.map((thread) => (
+            <ThreadCard
+              item={thread}
+              key={thread.id}
+              onPress={() => setSelectedThread(thread)}
+            />
+          ))
         ) : (
-          <>
-            <PillButton
-              disabled={!contacts.length}
-              icon={<Ionicons color={colors.white} name="create-outline" size={18} />}
-              onPress={() => setComposeOpen(true)}
-              style={styles.newButton}
-            >
-              New Conversation
-            </PillButton>
-            {data.threads.length ? (
-              data.threads.map((thread) => (
-                <ThreadCard
-                  item={thread}
-                  key={thread.id}
-                  onPress={() => setSelectedThread(thread)}
-                />
-              ))
-            ) : (
-              <Empty
-                icon="chatbubble-ellipses-outline"
-                text="Start a subject conversation with one of your teachers."
-                title="No conversations yet"
-              />
-            )}
-          </>
+          <Empty
+            icon="chatbubble-ellipses-outline"
+            text="Messages from teachers shared with you will appear here."
+            title="No messages yet"
+          />
         )}
       </Screen>
 
       <ThreadSheet
         onClose={() => setSelectedThread(null)}
-        onSent={load}
         thread={selectedThread}
-      />
-      <ComposeSheet
-        contacts={contacts}
-        onClose={() => setComposeOpen(false)}
-        onCreated={async (threadId) => {
-          setComposeOpen(false);
-          await load({ refresh: true });
-          const response = await api.shared.notes.threads({ threadId });
-          setSelectedThread(response?.thread || { id: threadId });
-        }}
-        visible={composeOpen}
       />
     </>
   );
@@ -239,7 +199,7 @@ function ThreadCard({ item, onPress }) {
       <View style={styles.threadCopy}>
         <View style={styles.threadTop}>
           <AppText numberOfLines={1} style={styles.threadTitle}>
-            {item.subject_name || "Learning conversation"}
+            {item.subject_name || "Teacher message"}
           </AppText>
           <AppText style={styles.threadDate}>
             {dateTime(item.last_message_at || item.updated_at)}
@@ -257,11 +217,9 @@ function ThreadCard({ item, onPress }) {
   );
 }
 
-function ThreadSheet({ onClose, onSent, thread }) {
+function ThreadSheet({ onClose, thread }) {
   const [messages, setMessages] = useState([]);
-  const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
   const loadMessages = useCallback(async () => {
@@ -279,32 +237,12 @@ function ThreadSheet({ onClose, onSent, thread }) {
   }, [thread?.id]);
 
   useEffect(() => {
-    setText("");
     loadMessages();
   }, [loadMessages]);
 
-  async function send() {
-    if (!text.trim() || sending) return;
-    setSending(true);
-    setError("");
-    try {
-      await api.shared.notes.sendMessage(thread.id, { message: text.trim() });
-      setText("");
-      await loadMessages();
-      await onSent({ refresh: true });
-    } catch (nextError) {
-      setError(nextError?.message || "Unable to send your reply.");
-    } finally {
-      setSending(false);
-    }
-  }
-
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible={Boolean(thread)}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.overlay}
-      >
+      <View style={styles.overlay}>
         <View style={styles.threadSheet}>
           <View style={styles.handle} />
           <View style={styles.sheetHeader}>
@@ -347,138 +285,14 @@ function ThreadSheet({ onClose, onSent, thread }) {
             )}
           </ScrollView>
           {error ? <AppText style={styles.inlineError}>{error}</AppText> : null}
-          <View style={styles.composer}>
-            <TextInput
-              multiline
-              onChangeText={setText}
-              placeholder="Write a reply..."
-              placeholderTextColor={colors.outline}
-              style={styles.composerInput}
-              value={text}
-            />
-            <Pressable
-              accessibilityLabel="Send reply"
-              disabled={!text.trim() || sending}
-              onPress={send}
-              style={[styles.send, (!text.trim() || sending) && styles.sendDisabled]}
-            >
-              <Ionicons color={colors.white} name="send" size={19} />
-            </Pressable>
+          <View style={styles.readOnlyBanner}>
+            <Ionicons color={colors.secondary} name="lock-closed-outline" size={16} />
+            <AppText style={styles.readOnlyBannerText}>
+              Students can view messages shared with them, but replies are disabled.
+            </AppText>
           </View>
         </View>
-      </KeyboardAvoidingView>
-    </Modal>
-  );
-}
-
-function ComposeSheet({ contacts, onClose, onCreated, visible }) {
-  const [selected, setSelected] = useState(null);
-  const [message, setMessage] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    if (visible) {
-      setSelected(null);
-      setMessage("");
-      setError("");
-    }
-  }, [visible]);
-
-  async function create() {
-    if (!selected || !message.trim() || saving) {
-      setError("Select a subject and write your message.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const response = await api.shared.notes.createThread({
-        teacherId: selected.subject.teacher_id,
-        courseId: selected.course.id,
-        subjectId: selected.subject.id,
-        visibility: "student",
-        message: message.trim(),
-      });
-      Alert.alert("Message sent", "Your subject conversation is ready.");
-      await onCreated(response?.item?.id);
-    } catch (nextError) {
-      setError(nextError?.message || "Unable to start this conversation.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal animationType="slide" onRequestClose={onClose} transparent visible={visible}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.overlay}>
-        <View style={styles.composeSheet}>
-          <View style={styles.handle} />
-          <View style={styles.sheetHeader}>
-            <View style={styles.sheetHeading}>
-              <AppText style={styles.eyebrow}>NEW CONVERSATION</AppText>
-              <AppText variant="heading">Message a Teacher</AppText>
-            </View>
-            <Pressable accessibilityLabel="Close new conversation" onPress={onClose}>
-              <Ionicons color={colors.onSurfaceVariant} name="close" size={26} />
-            </Pressable>
-          </View>
-          <ScrollView contentContainerStyle={styles.composeContent}>
-            <AppText style={styles.fieldLabel}>Choose enrolled subject</AppText>
-            <View style={styles.contacts}>
-              {contacts.map((contact) => {
-                const key = `${contact.course.id}-${contact.subject.id}-${contact.subject.teacher_id}`;
-                const active =
-                  selected?.course.id === contact.course.id &&
-                  selected?.subject.id === contact.subject.id;
-                return (
-                  <Pressable
-                    key={key}
-                    onPress={() => setSelected(contact)}
-                    style={[styles.contact, active && styles.contactActive]}
-                  >
-                    <View style={styles.contactCopy}>
-                      <AppText style={[styles.contactSubject, active && styles.contactActiveText]}>
-                        {contact.subject.name}
-                      </AppText>
-                      <AppText style={[styles.contactMeta, active && styles.contactActiveMeta]}>
-                        {contact.subject.teacher_name} · {contact.course.title}
-                      </AppText>
-                    </View>
-                    <Ionicons
-                      color={active ? colors.white : colors.outline}
-                      name={active ? "checkmark-circle" : "ellipse-outline"}
-                      size={20}
-                    />
-                  </Pressable>
-                );
-              })}
-            </View>
-            <AppText style={styles.fieldLabel}>Message</AppText>
-            <TextInput
-              multiline
-              onChangeText={(value) => {
-                setMessage(value);
-                setError("");
-              }}
-              placeholder="Ask a question about this subject..."
-              placeholderTextColor={colors.outline}
-              style={styles.textarea}
-              textAlignVertical="top"
-              value={message}
-            />
-            {error ? <AppText style={styles.inlineError}>{error}</AppText> : null}
-            <PillButton
-              icon={<Ionicons color={colors.white} name="send-outline" size={18} />}
-              loading={saving}
-              onPress={create}
-              style={styles.createButton}
-            >
-              Send Message
-            </PillButton>
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+      </View>
     </Modal>
   );
 }
@@ -531,7 +345,6 @@ const styles = StyleSheet.create({
   readOnly: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: space.sm, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.goldPale },
   readOnlyText: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 8 },
   noteText: { marginTop: space.md, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 19 },
-  newButton: { marginBottom: space.lg },
   thread: { flexDirection: "row", alignItems: "center", marginBottom: space.sm, padding: space.md, borderRadius: radius.xl, backgroundColor: colors.surface, ...shadows.subtle },
   pressed: { opacity: 0.72 },
   threadIcon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: colors.goldPale },
@@ -548,7 +361,6 @@ const styles = StyleSheet.create({
   retry: { marginTop: space.md },
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   threadSheet: { height: "88%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background, ...shadows.modal },
-  composeSheet: { maxHeight: "88%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background, ...shadows.modal },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
   sheetHeader: { flexDirection: "row", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
@@ -563,21 +375,7 @@ const styles = StyleSheet.create({
   myText: { color: colors.white },
   messageDate: { marginTop: 4, color: colors.outline, fontSize: 8 },
   myDate: { color: "#B9EEDB" },
-  composer: { flexDirection: "row", alignItems: "flex-end", gap: space.sm, padding: space.md, borderTopWidth: 1, borderTopColor: colors.borderGreen, backgroundColor: colors.surface },
-  composerInput: { maxHeight: 100, flex: 1, minHeight: 44, paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.xl, color: colors.onSurface, fontFamily: fonts.body, backgroundColor: colors.surfaceLow },
-  send: { width: 44, height: 44, alignItems: "center", justifyContent: "center", borderRadius: 22, backgroundColor: colors.primaryContainer },
-  sendDisabled: { opacity: 0.4 },
+  readOnlyBanner: { flexDirection: "row", alignItems: "center", gap: space.xs, paddingHorizontal: space.lg, paddingVertical: space.md, borderTopWidth: 1, borderTopColor: colors.borderGreen, backgroundColor: colors.goldPale },
+  readOnlyBannerText: { flex: 1, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   inlineError: { marginHorizontal: space.lg, marginVertical: space.sm, color: colors.error, fontSize: fontSize.xs },
-  composeContent: { padding: space.lg, paddingBottom: space["3xl"] },
-  fieldLabel: { marginBottom: space.sm, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  contacts: { gap: space.sm, marginBottom: space.lg },
-  contact: { flexDirection: "row", alignItems: "center", padding: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.lg, backgroundColor: colors.surface },
-  contactActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
-  contactCopy: { flex: 1 },
-  contactSubject: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  contactActiveText: { color: colors.white },
-  contactMeta: { color: colors.outline, fontSize: 9 },
-  contactActiveMeta: { color: "#B9EEDB" },
-  textarea: { minHeight: 110, padding: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.lg, color: colors.onSurface, fontFamily: fonts.body, backgroundColor: colors.surface },
-  createButton: { marginTop: space.lg },
 });

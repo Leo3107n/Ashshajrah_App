@@ -1,22 +1,18 @@
 /**
  * Parent Fees and Payments. Shows fee vouchers for all enrolled children,
  * grouped by child with a combined outstanding balance. Parents can view
- * voucher details and submit payment proof for unpaid or rejected vouchers
- * through the shared payment endpoint.
+ * voucher details and current payment status only, while payment submission
+ * remains part of the administrative workflow.
  */
 import { Ionicons } from "@expo/vector-icons";
-import * as DocumentPicker from "expo-document-picker";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Alert,
   Linking,
   Modal,
-  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
 } from "react-native";
 import api from "../../api";
@@ -28,9 +24,10 @@ import {
   StatusChip,
   SurfaceCard,
 } from "../../components/ui";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
-const MAX_PROOF_BYTES = 10 * 1024 * 1024;
 const FILTERS = ["all", "due", "submitted", "paid"];
 
 const normalized = (value) => String(value || "").toLowerCase();
@@ -96,8 +93,22 @@ export default function ParentFees() {
     setSelected(null);
   }, [childId, filter]);
 
+  useEffect(() => {
+    if (children.length === 1) {
+      setChildId(children[0]?.id || "");
+      return;
+    }
+    if (childId && children.some((child) => child.id === childId)) return;
+    setChildId("");
+  }, [childId, children]);
+
+  const requiresChildSelection = children.length > 1 && !childId;
+
   const summary = useMemo(
     () =>
+      requiresChildSelection
+        ? { total: 0, paid: 0, due: 0 }
+        :
       items.reduce(
         (acc, item) => {
           const state = stateOf(item);
@@ -108,18 +119,21 @@ export default function ParentFees() {
         },
         { total: 0, paid: 0, due: 0 }
       ),
-    [items]
+    [items, requiresChildSelection]
   );
 
   const visible = useMemo(
     () =>
+      requiresChildSelection
+        ? []
+        :
       items.filter((item) => {
         const state = stateOf(item);
         if (filter === "all") return true;
         if (filter === "due") return ["unpaid", "overdue", "rejected"].includes(state);
         return state === filter;
       }),
-    [filter, items]
+    [filter, items, requiresChildSelection]
   );
 
   // Group visible items by child name for display
@@ -155,21 +169,13 @@ export default function ParentFees() {
         </AppText>
 
         {children.length > 1 ? (
-          <ScrollView
-            contentContainerStyle={styles.childFilters}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-          >
-            <Filter active={!childId} label="All Children" onPress={() => setChildId("")} />
-            {children.map((child) => (
-              <Filter
-                active={childId === child.id}
-                key={child.id}
-                label={child.full_name || child.name}
-                onPress={() => setChildId(child.id)}
-              />
-            ))}
-          </ScrollView>
+          <ChildDropdown
+            children={children}
+            label="SELECT CHILD"
+            onChange={setChildId}
+            placeholder="Choose a child to view fee records"
+            selectedId={childId}
+          />
         ) : null}
 
         {/* Balance hero */}
@@ -209,6 +215,8 @@ export default function ParentFees() {
             <AppText style={styles.errorText}>{error}</AppText>
             <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
           </SurfaceCard>
+        ) : requiresChildSelection ? (
+          <ChildSelectionState message="Choose a child from the dropdown to view that child’s fee records." />
         ) : grouped.length ? (
           grouped.map(([childName, vouchers]) => (
             <View key={childName}>
@@ -243,10 +251,6 @@ export default function ParentFees() {
       <VoucherSheet
         item={selected}
         onClose={() => setSelected(null)}
-        onSubmitted={async () => {
-          setSelected(null);
-          await load({ refresh: true });
-        }}
       />
     </>
   );
@@ -306,84 +310,9 @@ function VoucherCard({ item, onPress }) {
   );
 }
 
-function VoucherSheet({ item, onClose, onSubmitted }) {
-  const [formOpen, setFormOpen] = useState(false);
-  const [payerName, setPayerName] = useState("");
-  const [transactionId, setTransactionId] = useState("");
-  const [paidAmount, setPaidAmount] = useState("");
-  const [proof, setProof] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    setFormOpen(false);
-    setPayerName("");
-    setTransactionId("");
-    setPaidAmount(item?.amount ? String(item.amount) : "");
-    setProof(null);
-    setError("");
-  }, [item]);
-
+function VoucherSheet({ item, onClose }) {
   if (!item) return null;
   const state = stateOf(item);
-  const canSubmit = ["unpaid", "overdue", "rejected"].includes(state);
-
-  async function chooseProof() {
-    const result = await DocumentPicker.getDocumentAsync({
-      copyToCacheDirectory: true,
-      multiple: false,
-      type: ["image/*", "application/pdf"],
-    });
-    if (result.canceled) return;
-    const asset = result.assets?.[0];
-    if (!asset) return;
-    if (Number(asset.size || 0) > MAX_PROOF_BYTES) {
-      setError("Payment proof must be 10 MB or smaller.");
-      return;
-    }
-    setProof(asset);
-    setError("");
-  }
-
-  async function submit() {
-    if (!payerName.trim() || payerName.trim().split(/\s+/).length < 2) {
-      setError("Enter the payer's full name (first and last).");
-      return;
-    }
-    if (!transactionId.trim() || !Number(paidAmount) || !proof) {
-      setError("Transaction ID, paid amount, and payment proof are all required.");
-      return;
-    }
-    setSaving(true);
-    setError("");
-    try {
-      const body = new FormData();
-      body.append("voucherNo", item.voucher_no);
-      body.append("payerName", payerName.trim());
-      body.append("transactionId", transactionId.trim());
-      body.append("paidAmount", String(Number(paidAmount)));
-      body.append("paidAt", new Date().toISOString());
-      if (Platform.OS === "web" && proof.file) {
-        body.append("proofFile", proof.file, proof.name);
-      } else {
-        body.append("proofFile", {
-          uri: proof.uri,
-          name: proof.name || "payment-proof",
-          type: proof.mimeType || "application/octet-stream",
-        });
-      }
-      await api.payment.submit(body);
-      Alert.alert(
-        "Payment submitted",
-        "Your payment proof has been sent for administrative verification."
-      );
-      await onSubmitted();
-    } catch (nextError) {
-      setError(nextError?.message || "Unable to submit payment proof.");
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <Modal animationType="slide" onRequestClose={onClose} transparent visible>
@@ -430,59 +359,6 @@ function VoucherSheet({ item, onClose, onSubmitted }) {
                 View Payment Proof
               </PillButton>
             ) : null}
-
-            {canSubmit && !formOpen ? (
-              <PillButton
-                icon={
-                  <Ionicons color={colors.white} name="cloud-upload-outline" size={18} />
-                }
-                onPress={() => setFormOpen(true)}
-                style={styles.submitButton}
-              >
-                Submit Payment Proof
-              </PillButton>
-            ) : null}
-
-            {formOpen ? (
-              <View style={styles.form}>
-                <AppText style={styles.formTitle}>Payment details</AppText>
-                <Field
-                  label="Payer full name"
-                  onChangeText={setPayerName}
-                  placeholder="e.g. Muhammad Adeel Khan"
-                  value={payerName}
-                />
-                <Field
-                  label="Transaction ID"
-                  onChangeText={setTransactionId}
-                  placeholder="Bank or wallet reference number"
-                  value={transactionId}
-                />
-                <Field
-                  keyboardType="decimal-pad"
-                  label="Paid amount (PKR)"
-                  onChangeText={setPaidAmount}
-                  placeholder="0"
-                  value={paidAmount}
-                />
-                <Pressable onPress={chooseProof} style={styles.proofPicker}>
-                  <Ionicons
-                    color={colors.secondary}
-                    name={proof ? "checkmark-circle-outline" : "attach-outline"}
-                    size={21}
-                  />
-                  <AppText numberOfLines={1} style={styles.proofPickerText}>
-                    {proof?.name || "Attach image or PDF proof"}
-                  </AppText>
-                </Pressable>
-                {error ? (
-                  <AppText style={styles.inlineError}>{error}</AppText>
-                ) : null}
-                <PillButton loading={saving} onPress={submit}>
-                  Send for Verification
-                </PillButton>
-              </View>
-            ) : null}
           </ScrollView>
         </View>
       </View>
@@ -495,19 +371,6 @@ function Detail({ label, value }) {
     <View style={styles.detailRow}>
       <AppText style={styles.detailLabel}>{label}</AppText>
       <AppText style={styles.detailValue}>{value}</AppText>
-    </View>
-  );
-}
-
-function Field({ label, ...props }) {
-  return (
-    <View>
-      <AppText style={styles.fieldLabel}>{label}</AppText>
-      <TextInput
-        placeholderTextColor={colors.outline}
-        style={styles.input}
-        {...props}
-      />
     </View>
   );
 }
@@ -561,12 +424,4 @@ const styles = StyleSheet.create({
   detailLabel: { color: colors.outline, fontSize: fontSize.xs },
   detailValue: { flex: 1, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs, textAlign: "right", textTransform: "capitalize" },
   proofButton: { marginTop: space.lg },
-  submitButton: { marginTop: space.lg },
-  form: { gap: space.md, marginTop: space.lg, paddingTop: space.lg, borderTopWidth: 1, borderTopColor: colors.borderGreen },
-  formTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.base },
-  fieldLabel: { marginBottom: space.xs, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  input: { height: 48, paddingHorizontal: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.lg, color: colors.onSurface, fontFamily: fonts.body, backgroundColor: colors.surface },
-  proofPicker: { height: 52, flexDirection: "row", alignItems: "center", gap: space.sm, paddingHorizontal: space.md, borderWidth: 1, borderStyle: "dashed", borderColor: colors.gold, borderRadius: radius.lg, backgroundColor: colors.goldPale },
-  proofPickerText: { flex: 1, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  inlineError: { color: colors.error, fontSize: fontSize.xs },
 });

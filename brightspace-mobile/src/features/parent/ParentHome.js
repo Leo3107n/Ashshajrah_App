@@ -18,6 +18,7 @@ import {
   SurfaceCard,
 } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import ChildDropdown from "./components/ChildDropdown";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 function firstName(user) {
@@ -91,7 +92,13 @@ export default function ParentHome() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [selectedChildId, setSelectedChildId] = useState("");
   const deadlineBanner = useMemo(() => feeDeadlineBanner(data.children), [data.children]);
+  const selectedChildren = useMemo(() => {
+    if (data.children.length <= 1) return data.children;
+    if (!selectedChildId) return [];
+    return data.children.filter((child) => child.id === selectedChildId);
+  }, [data.children, selectedChildId]);
 
   const load = useCallback(async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -116,6 +123,15 @@ export default function ParentHome() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  useEffect(() => {
+    if (data.children.length === 1) {
+      setSelectedChildId(data.children[0]?.id || "");
+      return;
+    }
+    if (selectedChildId && data.children.some((child) => child.id === selectedChildId)) return;
+    setSelectedChildId("");
+  }, [data.children, selectedChildId]);
 
   if (loading) return <DashboardSkeleton message="Preparing your parent portal..." />;
 
@@ -177,15 +193,34 @@ export default function ParentHome() {
 
       {/* Children cards */}
       <SectionHeader title={`${data.children.length} ${data.children.length === 1 ? "Child" : "Children"}`} />
+      {data.children.length > 1 ? (
+        <ChildDropdown
+          children={data.children}
+          label="SELECT CHILD"
+          onChange={setSelectedChildId}
+          placeholder="Choose a child to view class schedule"
+          selectedId={selectedChildId}
+        />
+      ) : null}
       {data.children.length ? (
-        data.children.map((child) => (
+        selectedChildren.length ? (
+          selectedChildren.map((child) => (
           <ChildCard
             child={child}
             key={child.id || childDisplayName(child)}
             onCalendar={() => router.push("/(app)/parent/calendar")}
             onFees={() => router.push("/(app)/parent/fees")}
           />
-        ))
+          ))
+        ) : data.children.length > 1 ? (
+          <SurfaceCard style={styles.empty}>
+            <Ionicons color={colors.secondary} name="chevron-down-circle-outline" size={28} />
+            <AppText style={styles.emptyTitle}>Select a child</AppText>
+            <AppText style={styles.emptyText}>
+              Choose a child from the dropdown to view that child&apos;s class and lecture schedule.
+            </AppText>
+          </SurfaceCard>
+        ) : null
       ) : (
         <SurfaceCard style={styles.empty}>
           <Ionicons color={colors.secondary} name="people-outline" size={28} />

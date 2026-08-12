@@ -28,6 +28,8 @@ import {
   SurfaceCard,
 } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 function initials(value) {
@@ -49,6 +51,7 @@ export default function ParentProfile() {
   const { isAuthenticating, logout, role, updateSessionUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [children, setChildren] = useState([]);
+  const [selectedChildId, setSelectedChildId] = useState("");
   const [form, setForm] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -79,6 +82,15 @@ export default function ParentProfile() {
   useEffect(() => {
     load();
   }, [load]);
+
+  useEffect(() => {
+    if (children.length === 1) {
+      setSelectedChildId(children[0]?.id || "");
+      return;
+    }
+    if (selectedChildId && children.some((child) => child.id === selectedChildId)) return;
+    setSelectedChildId("");
+  }, [children, selectedChildId]);
 
   function edit() {
     setForm({
@@ -215,25 +227,42 @@ export default function ParentProfile() {
 
         <Section title={`Enrolled Children (${children.length})`}>
           {children.length ? (
-            children.map((child) => (
-              <SurfaceCard key={child.id} style={styles.childCard}>
-                <View style={styles.childHeader}>
-                  <View style={styles.childAvatar}>
-                    <AppText style={styles.childInitial}>
-                      {String(child.full_name || child.name || "C")[0].toUpperCase()}
-                    </AppText>
-                  </View>
-                  <View style={styles.childCopy}>
-                    <AppText style={styles.childName}>
-                      {child.full_name || child.name}
-                    </AppText>
-                    <AppText style={styles.childClass}>
-                      {child.course_title || child.class_level || "Enrolled"}
-                    </AppText>
-                  </View>
-                </View>
-              </SurfaceCard>
-            ))
+            <>
+              {children.length > 1 ? (
+                <ChildDropdown
+                  children={children}
+                  label="SELECT CHILD"
+                  onChange={setSelectedChildId}
+                  placeholder="Choose a child to view profile details"
+                  selectedId={selectedChildId}
+                />
+              ) : null}
+              {children.length === 1 || selectedChildId ? (
+                children
+                  .filter((child) => (children.length === 1 ? true : child.id === selectedChildId))
+                  .map((child) => (
+                    <SurfaceCard key={child.id} style={styles.childCard}>
+                      <View style={styles.childHeader}>
+                        <View style={styles.childAvatar}>
+                          <AppText style={styles.childInitial}>
+                            {String(child.full_name || child.name || "C")[0].toUpperCase()}
+                          </AppText>
+                        </View>
+                        <View style={styles.childCopy}>
+                          <AppText style={styles.childName}>
+                            {child.full_name || child.name}
+                          </AppText>
+                          <AppText style={styles.childClass}>
+                            {child.course_title || child.class_level || "Enrolled"}
+                          </AppText>
+                        </View>
+                      </View>
+                    </SurfaceCard>
+                  ))
+              ) : (
+                <ChildSelectionState message="Choose a child from the dropdown to view that child’s profile card." />
+              )}
+            </>
           ) : (
             <SurfaceCard elevated={false} style={styles.empty}>
               <Ionicons color={colors.outline} name="school-outline" size={26} />

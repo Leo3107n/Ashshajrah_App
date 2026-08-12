@@ -8,6 +8,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 
 const FILTERS = [
@@ -71,8 +73,22 @@ export default function ParentLectures() {
     setSelected(null);
   }, [childId, filter, subjectId]);
 
+  useEffect(() => {
+    if (data.children.length === 1) {
+      setChildId(data.children[0]?.id || "");
+      return;
+    }
+    if (childId && data.children.some((child) => child.id === childId)) return;
+    setChildId("");
+  }, [childId, data.children]);
+
+  const requiresChildSelection = data.children.length > 1 && !childId;
+
   const visible = useMemo(
     () =>
+      requiresChildSelection
+        ? []
+        :
       data.items.filter((item) => {
         if (subjectId && item.subject_id !== subjectId) return false;
         const status = statusOf(item);
@@ -81,7 +97,7 @@ export default function ParentLectures() {
         if (filter === "recorded") return Boolean(item.recording_drive_url);
         return true;
       }),
-    [data.items, filter, subjectId]
+    [data.items, filter, requiresChildSelection, subjectId]
   );
 
   if (loading) return <DashboardSkeleton message="Gathering lectures..." />;
@@ -99,12 +115,13 @@ export default function ParentLectures() {
         </View>
 
         {data.children.length > 1 ? (
-          <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
-            <Filter active={!childId} label="All Children" onPress={() => setChildId("")} />
-            {data.children.map((child) => (
-              <Filter active={childId === child.id} key={child.id} label={child.full_name || child.name} onPress={() => setChildId(child.id)} />
-            ))}
-          </ScrollView>
+          <ChildDropdown
+            children={data.children}
+            label="SELECT CHILD"
+            onChange={setChildId}
+            placeholder="Choose a child to view lecture schedule"
+            selectedId={childId}
+          />
         ) : null}
 
         <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
@@ -132,6 +149,8 @@ export default function ParentLectures() {
             <AppText style={styles.errorText}>{error}</AppText>
             <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
           </SurfaceCard>
+        ) : requiresChildSelection ? (
+          <ChildSelectionState message="Choose a child from the dropdown to view that child’s lecture schedule." />
         ) : visible.length ? (
           visible.map((item) => <LectureRow item={item} key={item.id} onPress={() => setSelected(item)} />)
         ) : (

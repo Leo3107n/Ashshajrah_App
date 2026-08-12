@@ -1,8 +1,7 @@
 /**
- * Parent Notes & Messages. Read-only teacher feedback plus reply-capable
- * subject conversations, scoped to the parent's children. Unlike the Student
- * screen, parents cannot start a new conversation here — that thread is
- * opened by the teacher first; parents only reply.
+ * Parent Notes & Messages. Parents can read teacher feedback and reply to
+ * teacher-started message threads about their own children only. This keeps
+ * the parent inbox child-scoped while still allowing back-and-forth replies.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
@@ -19,6 +18,8 @@ import {
 } from "react-native";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../components/ui";
+import ChildDropdown from "./components/ChildDropdown";
+import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 function dateTime(value) {
@@ -68,6 +69,17 @@ export default function ParentNotes() {
     setSelectedThread(null);
   }, [childId]);
 
+  useEffect(() => {
+    if (data.children.length === 1) {
+      setChildId(data.children[0]?.id || "");
+      return;
+    }
+    if (childId && data.children.some((child) => child.id === childId)) return;
+    setChildId("");
+  }, [childId, data.children]);
+
+  const requiresChildSelection = data.children.length > 1 && !childId;
+
   if (loading) return <DashboardSkeleton message="Opening communications..." />;
 
   return (
@@ -79,21 +91,22 @@ export default function ParentNotes() {
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>STAY CONNECTED</AppText>
           <AppText variant="display">Notes & Messages</AppText>
-          <AppText style={styles.subtitle}>Read teacher feedback and reply to open conversations.</AppText>
+          <AppText style={styles.subtitle}>Read teacher feedback and reply to messages about your child.</AppText>
         </View>
 
         {data.children.length > 1 ? (
-          <ScrollView contentContainerStyle={styles.childFilters} horizontal showsHorizontalScrollIndicator={false}>
-            <Chip active={!childId} label="All Children" onPress={() => setChildId("")} />
-            {data.children.map((child) => (
-              <Chip active={childId === child.id} key={child.id} label={child.full_name || child.name} onPress={() => setChildId(child.id)} />
-            ))}
-          </ScrollView>
+          <ChildDropdown
+            children={data.children}
+            label="SELECT CHILD"
+            onChange={setChildId}
+            placeholder="Choose a child to view notes and messages"
+            selectedId={childId}
+          />
         ) : null}
 
         <View style={styles.tabs}>
           <Tab active={tab === "notes"} count={data.notes.length} icon="document-text-outline" label="Teacher Notes" onPress={() => setTab("notes")} />
-          <Tab active={tab === "messages"} count={data.threads.length} icon="chatbubbles-outline" label="Conversations" onPress={() => setTab("messages")} />
+          <Tab active={tab === "messages"} count={data.threads.length} icon="chatbubbles-outline" label="Messages" onPress={() => setTab("messages")} />
         </View>
 
         {error ? (
@@ -102,12 +115,14 @@ export default function ParentNotes() {
             <AppText style={styles.errorText}>{error}</AppText>
             <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
           </SurfaceCard>
+        ) : requiresChildSelection ? (
+          <ChildSelectionState message="Choose a child from the dropdown to view that child’s notes and messages." />
         ) : tab === "notes" ? (
           <NotesList items={data.notes} />
         ) : data.threads.length ? (
           data.threads.map((thread) => <ThreadCard item={thread} key={thread.id} onPress={() => setSelectedThread(thread)} />)
         ) : (
-          <Empty icon="chatbubble-ellipses-outline" text="Conversations a teacher starts about your child will appear here." title="No conversations yet" />
+          <Empty icon="chatbubble-ellipses-outline" text="Messages that teachers share about your child will appear here." title="No messages yet" />
         )}
       </Screen>
 
@@ -145,13 +160,13 @@ function ThreadCard({ item, onPress }) {
       <View style={styles.threadIcon}><Ionicons color={colors.secondary} name="chatbubbles-outline" size={21} /></View>
       <View style={styles.threadCopy}>
         <View style={styles.threadTop}>
-          <AppText numberOfLines={1} style={styles.threadTitle}>{item.subject_name || "Learning conversation"}</AppText>
+          <AppText numberOfLines={1} style={styles.threadTitle}>{item.subject_name || "Teacher message"}</AppText>
           <AppText style={styles.threadDate}>{dateTime(item.last_message_at || item.updated_at)}</AppText>
         </View>
         <AppText style={styles.threadTeacher}>
           {item.teacher_name || "Teacher"} · {item.student_name || item.course_title || item.class_level}
         </AppText>
-        <AppText numberOfLines={2} style={styles.lastMessage}>{item.last_message || "Open this conversation"}</AppText>
+        <AppText numberOfLines={2} style={styles.lastMessage}>{item.last_message || "Open this message thread"}</AppText>
       </View>
       <Ionicons color={colors.outline} name="chevron-forward" size={19} />
     </Pressable>
@@ -207,11 +222,11 @@ function ThreadSheet({ onClose, onSent, thread }) {
           <View style={styles.handle} />
           <View style={styles.sheetHeader}>
             <View style={styles.sheetHeading}>
-              <AppText style={styles.eyebrow}>CONVERSATION</AppText>
+              <AppText style={styles.eyebrow}>MESSAGE THREAD</AppText>
               <AppText variant="heading">{thread?.subject_name || "Teacher Messages"}</AppText>
               <AppText style={styles.sheetMeta}>{thread?.teacher_name || "Teacher"} · {thread?.student_name || thread?.course_title}</AppText>
             </View>
-            <Pressable accessibilityLabel="Close conversation" onPress={onClose}>
+            <Pressable accessibilityLabel="Close message thread" onPress={onClose}>
               <Ionicons color={colors.onSurfaceVariant} name="close" size={26} />
             </Pressable>
           </View>
@@ -230,7 +245,7 @@ function ThreadSheet({ onClose, onSent, thread }) {
                 );
               })
             ) : (
-              <AppText style={styles.loadingText}>No messages in this conversation.</AppText>
+              <AppText style={styles.loadingText}>No messages in this thread yet.</AppText>
             )}
           </ScrollView>
           {error ? <AppText style={styles.inlineError}>{error}</AppText> : null}
@@ -238,7 +253,7 @@ function ThreadSheet({ onClose, onSent, thread }) {
             <TextInput
               multiline
               onChangeText={setText}
-              placeholder="Write a reply..."
+              placeholder="Write a reply about your child..."
               placeholderTextColor={colors.outline}
               style={styles.composerInput}
               value={text}
