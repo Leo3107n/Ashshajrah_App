@@ -37,9 +37,18 @@ function userFromSession(session) {
 function hasUsableSession(session) {
   const sessionUser = userFromSession(session);
   const accountStatus = String(sessionUser?.status || "active").toLowerCase();
+  const role = normalizeRole(sessionUser?.role);
+  const roles = Array.isArray(sessionUser?.roles)
+    ? sessionUser.roles.map((item) => normalizeRole(item)).filter(Boolean)
+    : [];
+
+  // A restored session is only considered safe when the active role still
+  // exists inside the server-reported allowed role list. This prevents a stale
+  // cookie from reopening a portal role that was removed later.
   return Boolean(
     sessionUser?.id &&
-    isSupportedRole(sessionUser?.role) &&
+    isSupportedRole(role) &&
+    (roles.length === 0 || roles.includes(role)) &&
     accountStatus === "active"
   );
 }
@@ -82,6 +91,9 @@ export function AuthProvider({ children }) {
 
         // Never mount protected navigation from a stale, suspended, or
         // unsupported session, even if a cookie can still be decrypted.
+        // For multi-role accounts, nextSession.user.role is already the single
+        // chosen portal for this session, while nextSession.user.roles holds
+        // the full list of still-allowed roles returned by the server.
         if (hasUsableSession(nextSession)) {
           setSession(nextSession);
           setStatus("authenticated");
@@ -114,6 +126,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async ({ identifier, password }) => {
     const cleanIdentifier = String(identifier || "").trim();
+    const cleanPassword = String(password || "");
 
     if (!cleanIdentifier) {
       throw new ApiError("Email, phone, or username is required.", {
@@ -133,9 +146,117 @@ export function AuthProvider({ children }) {
     }
 
     try {
+      // Step 1 for mobile login:
+      // validate credentials and ask the server whether this account unlocks
+      // one portal or several. We only create the real session immediately for
+      // single-role accounts.
+      const roleInspection = await api.auth.roleOptions({
+        identifier: cleanIdentifier,
+        password: cleanPassword,
+      });
+
+      const availableRoles = Array.isArray(roleInspection?.user?.roles)
+        ? roleInspection.user.roles.filter(isSupportedRole)
+        : [];
+      const defaultRole = normalizeRole(roleInspection?.user?.defaultRole);
+
+      if (availableRoles.length === 0 && !defaultRole) {
+        throw new ApiError("This account cannot access the mobile portal.", {
+          status: 403,
+          code: "UNSUPPORTED_OR_INACTIVE_ACCOUNT",
+        });
+      }
+
+      if (availableRoles.length > 1) {
+        if (mountedRef.current) {
+          setStatus("unauthenticated");
+          setError(null);
+        }
+
+        // The login screen uses this signal to open the role-selection modal.
+        // We intentionally defer the real sign-in until the user taps one of
+        // the returned roles.
+        return {
+          requiresRoleSelection: true,
+          roles: availableRoles,
+          defaultRole,
+          identifier: cleanIdentifier,
+          password: cleanPassword,
+          user: roleInspection?.user || null,
+        };
+      }
+
       const nextSession = await api.auth.signIn({
         identifier: cleanIdentifier,
-        password: String(password),
+        password: cleanPassword,
+        selectedRole: defaultRole || availableRoles[0] || "",
+      });
+
+      if (!hasUsableSession(nextSession)) {
+        throw new ApiError("This account cannot access the mobile portal.", {
+          status: 403,
+          code: "UNSUPPORTED_OR_INACTIVE_ACCOUNT",
+        });
+      }
+
+      if (mountedRef.current) {
+        setSession(nextSession);
+        setStatus("authenticated");
+        setNotice("");
+      }
+
+      return {
+        session: nextSession,
+        user: userFromSession(nextSession),
+        role: normalizeRole(nextSession?.user?.role),
+        route: getRoleHomeRoute(nextSession?.user?.role),
+      };
+    } catch (nextError) {
+      if (mountedRef.current) {
+        setSession(null);
+        setStatus("unauthenticated");
+        setError(nextError);
+      }
+      throw nextError;
+    }
+  }, []);
+
+  const loginWithRole = useCallback(async ({ identifier, password, selectedRole }) => {
+    const cleanIdentifier = String(identifier || "").trim();
+    const cleanPassword = String(password || "");
+    const roleChoice = normalizeRole(selectedRole);
+
+    if (!cleanIdentifier) {
+      throw new ApiError("Email, phone, or username is required.", {
+        code: "MISSING_IDENTIFIER",
+      });
+    }
+
+    if (!cleanPassword.trim()) {
+      throw new ApiError("Password is required.", {
+        code: "MISSING_PASSWORD",
+      });
+    }
+
+    if (!roleChoice) {
+      throw new ApiError("Select a role to continue.", {
+        code: "MISSING_ROLE_SELECTION",
+      });
+    }
+
+    if (mountedRef.current) {
+      setStatus("authenticating");
+      setError(null);
+    }
+
+    try {
+      // Step 2 for mobile login:
+      // complete the actual sign-in for the one role chosen in the modal and
+      // let the backend store that selected portal role in the session token.
+      const nextSession = await api.auth.signIn({
+        identifier: cleanIdentifier,
+        password: cleanPassword,
+        selectedRole: roleChoice,
       });
 
       if (!hasUsableSession(nextSession)) {
@@ -250,6 +371,7 @@ export function AuthProvider({ children }) {
       isAuthenticated: status === "authenticated" && Boolean(user),
       homeRoute: getRoleHomeRoute(role),
       login,
+      loginWithRole,
       logout,
       refreshSession,
       clearError,
@@ -264,6 +386,7 @@ export function AuthProvider({ children }) {
       error,
       notice,
       login,
+      loginWithRole,
       logout,
       refreshSession,
       clearError,

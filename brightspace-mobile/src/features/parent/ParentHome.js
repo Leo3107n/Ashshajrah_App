@@ -58,6 +58,27 @@ function childLectures(child) {
   return Array.isArray(child?.today_lectures) ? child.today_lectures : [];
 }
 
+function feeDeadlineBanner(children) {
+  const missed = (Array.isArray(children) ? children : [])
+    .filter((child) => child?.fee_deadline_missed)
+    .sort((left, right) => {
+      const leftTime = left?.fee_due_date ? new Date(left.fee_due_date).getTime() : Number.POSITIVE_INFINITY;
+      const rightTime = right?.fee_due_date ? new Date(right.fee_due_date).getTime() : Number.POSITIVE_INFINITY;
+      return leftTime - rightTime;
+    })[0];
+
+  if (!missed) return null;
+
+  const parsed = missed.fee_due_date ? new Date(missed.fee_due_date) : null;
+  const dueLabel = parsed && !Number.isNaN(parsed.getTime())
+    ? parsed.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
+    : "";
+
+  return dueLabel
+    ? `Fee Deadline was ${dueLabel}.`
+    : "Fee Deadline is missed.";
+}
+
 export default function ParentHome() {
   const router = useRouter();
   const { user } = useAuth();
@@ -70,6 +91,7 @@ export default function ParentHome() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const deadlineBanner = useMemo(() => feeDeadlineBanner(data.children), [data.children]);
 
   const load = useCallback(async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -146,6 +168,13 @@ export default function ParentHome() {
         </View>
       </LinearGradient>
 
+      {deadlineBanner ? (
+        <SurfaceCard style={styles.deadlineBanner}>
+          <Ionicons color={colors.error} name="alert-circle-outline" size={20} />
+          <AppText style={styles.deadlineBannerText}>{deadlineBanner}</AppText>
+        </SurfaceCard>
+      ) : null}
+
       {/* Children cards */}
       <SectionHeader title={`${data.children.length} ${data.children.length === 1 ? "Child" : "Children"}`} />
       {data.children.length ? (
@@ -199,11 +228,6 @@ export default function ParentHome() {
           icon="chatbubbles-outline"
           label="Notes"
           onPress={() => router.push("/(app)/parent/notes")}
-        />
-        <QuickAction
-          icon="time-outline"
-          label="Timeline"
-          onPress={() => router.push("/(app)/parent/timeline")}
         />
         <QuickAction
           icon="person-outline"
@@ -378,6 +402,8 @@ const styles = StyleSheet.create({
   heroBody: { marginTop: space.xs, color: "#D6E9E2", fontSize: fontSize.sm },
   bell: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(255,255,255,0.12)" },
   unreadDot: { position: "absolute", top: 8, right: 8, width: 8, height: 8, borderWidth: 1.5, borderColor: colors.primaryContainer, borderRadius: 4, backgroundColor: colors.gold },
+  deadlineBanner: { flexDirection: "row", alignItems: "center", marginTop: space.md, backgroundColor: colors.errorContainer, borderColor: colors.error, borderWidth: 1 },
+  deadlineBannerText: { flex: 1, marginLeft: space.sm, color: colors.error, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   sectionTitle: { marginTop: space.xl, marginBottom: space.sm, color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   childCard: { marginBottom: space.md },
   childHeader: { flexDirection: "row", alignItems: "center" },

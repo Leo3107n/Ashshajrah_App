@@ -24,7 +24,32 @@ export const API_BASE_URL = String(configuredBaseUrl || "")
   .trim()
   .replace(/\/+$/, "");
 
-function detectExpoHostBaseUrl() {
+function stripPort(hostname) {
+  return String(hostname || "").includes(":") ? String(hostname).split(":")[0] : String(hostname || "");
+}
+
+function configuredHostname() {
+  try {
+    return stripPort(new URL(API_BASE_URL).hostname);
+  } catch {
+    return "";
+  }
+}
+
+function configuredPort() {
+  try {
+    return new URL(API_BASE_URL).port || "3000";
+  } catch {
+    return "3000";
+  }
+}
+
+function preferredPorts() {
+  const primary = configuredPort();
+  return [...new Set([primary, "3000", "3001"])].filter(Boolean);
+}
+
+function detectExpoHostname() {
   const hostUri =
     Constants?.expoConfig?.hostUri ||
     Constants?.expoGoConfig?.hostUri ||
@@ -40,23 +65,26 @@ function detectExpoHostBaseUrl() {
 
   if (!host) return "";
 
-  const hostname = host.includes(":") ? host.split(":")[0] : host;
+  const hostname = stripPort(host);
   if (!hostname || hostname === "localhost" || hostname === "127.0.0.1") return "";
 
-  // Keep Expo's detected host fallback on the same port as the configured API.
-  // Next may select 3001 when another process already owns its default port.
-  let configuredPort = "3000";
-  try {
-    configuredPort = new URL(API_BASE_URL).port || "3000";
-  } catch {
-    // An invalid/missing configured URL is reported by the request layer.
-  }
-
-  return `http://${hostname}:${configuredPort}`;
+  return hostname;
 }
 
 function candidateBaseUrls() {
-  const urls = [API_BASE_URL, detectExpoHostBaseUrl()].filter(Boolean);
+  const hostnames = [...new Set([configuredHostname(), detectExpoHostname()].filter(Boolean))];
+  const urls = [];
+
+  if (API_BASE_URL) {
+    urls.push(API_BASE_URL);
+  }
+
+  for (const hostname of hostnames) {
+    for (const port of preferredPorts()) {
+      urls.push(`http://${hostname}:${port}`);
+    }
+  }
+
   return [...new Set(urls)];
 }
 
@@ -156,20 +184,53 @@ export class ApiError extends Error {
 
 async function fetchWithFallback(path, options = {}) {
   let lastError = null;
+  const urls = candidateBaseUrls();
+  const perAttemptTimeoutMs = Math.max(
+    4_000,
+    Math.min(10_000, Math.floor((options.timeoutMs || DEFAULT_TIMEOUT_MS) / Math.max(urls.length, 1)))
+  );
 
-  for (const baseUrl of candidateBaseUrls()) {
+  for (const baseUrl of urls) {
     const url = `${baseUrl}${withQuery(path, options.query)}`;
+    const attemptController = new AbortController();
+    let attemptTimedOut = false;
+    const timeoutHandle = setTimeout(() => {
+      attemptTimedOut = true;
+      attemptController.abort();
+    }, perAttemptTimeoutMs);
+
+    const abortFromParent = () => attemptController.abort();
+    if (options.signal) {
+      if (options.signal.aborted) attemptController.abort();
+      else options.signal.addEventListener("abort", abortFromParent, { once: true });
+    }
+
     try {
       const response = await fetch(url, {
         method: options.method || "GET",
         headers: options.headers,
         body: options.body,
         credentials: "include",
-        signal: options.signal,
+        signal: attemptController.signal,
       });
       return { response, url };
     } catch (error) {
+      if (options.signal?.aborted) {
+        throw error;
+      }
+
+      if (error?.name === "AbortError" && attemptTimedOut) {
+        lastError = new Error(`Timed out reaching ${url}`);
+        lastError.name = "AttemptTimeoutError";
+        continue;
+      }
+
       lastError = error;
+    } finally {
+      clearTimeout(timeoutHandle);
+      if (options.signal) {
+        options.signal.removeEventListener?.("abort", abortFromParent);
+      }
     }
   }
 
@@ -352,6 +413,7 @@ export async function request(path, options = {}) {
       body: requestBody,
       signal: controller.signal,
       query,
+      timeoutMs,
     });
     rememberResponseCookies(response);
     const data = await parseResponse(response, responseType);
@@ -419,8 +481,10 @@ export const authApi = {
   session: () => get("/api/auth/session"),
   csrf: () => get("/api/auth/csrf"),
   providers: () => get("/api/auth/providers"),
+  roleOptions: ({ identifier, password }) =>
+    post("/api/auth/role-options", { identifier, password }),
 
-  async signIn({ identifier, password, callbackUrl = "/" }) {
+  async signIn({ identifier, password, callbackUrl = "/", selectedRole }) {
     const csrf = await authApi.csrf();
     if (!csrf?.csrfToken) {
       throw new ApiError("The server did not provide a CSRF token.", {
@@ -432,6 +496,7 @@ export const authApi = {
       ["csrfToken", csrf.csrfToken],
       ["identifier", identifier],
       ["password", password],
+      ["selectedRole", selectedRole || ""],
       ["callbackUrl", `${API_BASE_URL}${callbackUrl}`],
       ["redirect", "false"],
       ["json", "true"],

@@ -6,9 +6,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   StyleSheet,
@@ -30,12 +32,15 @@ function messageFor(error) {
 export default function LoginScreen() {
   const router = useRouter();
   const passwordRef = useRef(null);
-  const { clearError, clearNotice, homeRoute, isAuthenticated, login, notice } = useAuth();
+  const { clearError, clearNotice, homeRoute, isAuthenticated, login, loginWithRole, notice } = useAuth();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [visible, setVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [roleOptions, setRoleOptions] = useState([]);
+  const [roleSelectorVisible, setRoleSelectorVisible] = useState(false);
+  const [rolePending, setRolePending] = useState(false);
 
   useEffect(() => { clearError(); }, [clearError]);
   useEffect(() => { if (isAuthenticated) router.replace(homeRoute); }, [homeRoute, isAuthenticated, router]);
@@ -50,12 +55,39 @@ export default function LoginScreen() {
     setPending(true);
     setError("");
     try {
+      // First request only tells us whether this account has one role or many.
+      // When multiple portals are available, the AuthContext returns a
+      // requiresRoleSelection flag so we can open the modal instead of routing
+      // immediately.
       const result = await login({ identifier, password });
+      if (result?.requiresRoleSelection) {
+        setRoleOptions(result.roles || []);
+        setRoleSelectorVisible(true);
+        return;
+      }
       router.replace(result.route);
     } catch (nextError) {
       setError(messageFor(nextError instanceof ApiError ? nextError : new ApiError("Sign in failed.")));
     } finally {
       setPending(false);
+    }
+  }
+
+  async function submitRole(role) {
+    // The second step completes the real sign-in for the exact chosen role.
+    if (rolePending) return;
+    setRolePending(true);
+    setError("");
+    try {
+      const result = await loginWithRole({ identifier, password, selectedRole: role });
+      setRoleSelectorVisible(false);
+      setRoleOptions([]);
+      router.replace(result.route);
+    } catch (nextError) {
+      setError(messageFor(nextError instanceof ApiError ? nextError : new ApiError("Sign in failed.")));
+      setRoleSelectorVisible(false);
+    } finally {
+      setRolePending(false);
     }
   }
 
@@ -112,15 +144,72 @@ export default function LoginScreen() {
                 </Pressable>
               </View>
 
-              <Pressable style={styles.forgot}><AppText style={styles.forgotText}>Forgot Password?</AppText></Pressable>
               {notice && !error ? <Pressable onPress={clearNotice} style={styles.notice}><Ionicons color={colors.secondary} name="time-outline" size={18} /><AppText style={styles.noticeText}>{notice}</AppText></Pressable> : null}
               {error ? <View style={styles.error}><Ionicons color={colors.error} name="alert-circle-outline" size={18} /><AppText style={styles.errorText}>{error}</AppText></View> : null}
-              <PillButton icon={<Ionicons color={colors.white} name="log-in-outline" size={19} />} loading={pending} onPress={submit}>Sign In</PillButton>
+              <PillButton icon={<Ionicons color={colors.white} name="log-in-outline" size={19} />} loading={pending} onPress={submit} style={styles.signInButton}>Sign In</PillButton>
               <View style={styles.secure}><Ionicons color={colors.outline} name="shield-checkmark-outline" size={15} /><AppText style={styles.secureText}>Secure access managed by Ash-Shajrah</AppText></View>
             </View>
           </View>
         </Screen>
       </KeyboardAvoidingView>
+
+      <Modal animationType="fade" transparent visible={roleSelectorVisible}>
+        {/* Multi-role accounts share one credential set, but only one portal
+            should open per active session. This modal lets the user choose
+            Teacher / Coordinator / etc before the session is finalized. */}
+        <View style={styles.modalOverlay}>
+          <View pointerEvents="none" style={styles.modalGlowLeft} />
+          <View pointerEvents="none" style={styles.modalGlowRight} />
+          <Pressable
+            disabled={rolePending}
+            onPress={() => {
+              if (rolePending) return;
+              setRoleSelectorVisible(false);
+              setRoleOptions([]);
+            }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.modalCard}>
+            <View style={styles.modalHeaderRow}>
+              <View style={styles.modalHeaderCopy}>
+                <AppText style={styles.modalEyebrow}>Select your role</AppText>
+                <AppText style={styles.modalTitle}>This account has multiple portals</AppText>
+                <AppText style={styles.modalSubtitle}>Choose the role you want to continue with.</AppText>
+              </View>
+              <Pressable
+                disabled={rolePending}
+                onPress={() => {
+                  if (rolePending) return;
+                  setRoleSelectorVisible(false);
+                  setRoleOptions([]);
+                }}
+                style={styles.closeButton}
+              >
+                <Ionicons color={colors.onSurfaceVariant} name="close" size={18} />
+              </Pressable>
+            </View>
+
+            <View style={styles.roleList}>
+              {roleOptions.map((role) => (
+                <Pressable
+                  key={role}
+                  disabled={rolePending}
+                  onPress={() => submitRole(role)}
+                  style={styles.roleButton}
+                >
+                  {rolePending ? (
+                    <ActivityIndicator color={colors.primary} size="small" />
+                  ) : (
+                    <AppText style={styles.roleButtonText}>
+                      {String(role || "").replace(/^\w/, (c) => c.toUpperCase())}
+                    </AppText>
+                  )}
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -140,12 +229,98 @@ const styles = StyleSheet.create({
   passwordLabel: { marginTop: space.md },
   inputWrap: { minHeight: 52, flexDirection: "row", alignItems: "center", marginTop: space.sm, paddingHorizontal: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.lg, backgroundColor: colors.surfaceLow },
   input: { flex: 1, paddingHorizontal: space.sm, color: colors.onSurface, fontFamily: fonts.body, fontSize: fontSize.sm },
-  forgot: { alignSelf: "flex-end", paddingVertical: space.md },
-  forgotText: { color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  signInButton: { marginTop: space.md },
   error: { flexDirection: "row", alignItems: "center", marginBottom: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.errorContainer },
   errorText: { flex: 1, marginLeft: space.sm, color: colors.error, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs, lineHeight: 18 },
   notice: { flexDirection: "row", alignItems: "center", marginBottom: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
   noticeText: { flex: 1, marginLeft: space.sm, color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs, lineHeight: 18 },
   secure: { flexDirection: "row", alignItems: "center", justifyContent: "center", marginTop: space.lg },
   secureText: { marginLeft: space.xs, color: colors.outline, fontSize: 10 },
+  modalOverlay: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: space.lg,
+    backgroundColor: "rgba(248, 245, 236, 0.82)",
+  },
+  modalGlowLeft: {
+    position: "absolute",
+    left: -48,
+    top: "26%",
+    width: 208,
+    height: 208,
+    borderRadius: 999,
+    backgroundColor: "rgba(45,138,106,0.16)",
+  },
+  modalGlowRight: {
+    position: "absolute",
+    right: -36,
+    bottom: "28%",
+    width: 176,
+    height: 176,
+    borderRadius: 999,
+    backgroundColor: "rgba(201,162,39,0.12)",
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 420,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    borderRadius: 30,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    paddingHorizontal: space.xl,
+    paddingTop: 22,
+    paddingBottom: 24,
+    ...shadows.modal,
+  },
+  modalHeaderRow: { flexDirection: "row", alignItems: "flex-start" },
+  modalHeaderCopy: { flex: 1, paddingRight: space.md },
+  modalEyebrow: {
+    color: colors.textMuted,
+    fontSize: fontSize["2xs"],
+    letterSpacing: 2.6,
+    textTransform: "uppercase",
+    fontFamily: fonts.bodyBold,
+  },
+  modalTitle: {
+    marginTop: 10,
+    color: colors.textPrimary,
+    fontFamily: fonts.bodyBold,
+    fontSize: 19,
+    lineHeight: 28,
+  },
+  modalSubtitle: {
+    marginTop: 8,
+    color: colors.textSecondary,
+    fontFamily: fonts.body,
+    fontSize: fontSize.base,
+    lineHeight: 24,
+  },
+  closeButton: {
+    width: 36,
+    height: 36,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    borderRadius: radius.full,
+    backgroundColor: "rgba(252,249,242,0.96)",
+  },
+  roleList: { marginTop: 24, gap: 12 },
+  roleButton: {
+    minHeight: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: colors.borderDark,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+  },
+  roleButtonText: {
+    color: colors.textSecondary,
+    fontFamily: fonts.bodyBold,
+    fontSize: fontSize.base,
+    lineHeight: 22,
+  },
 });

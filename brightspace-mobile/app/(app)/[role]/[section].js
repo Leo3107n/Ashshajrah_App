@@ -29,7 +29,6 @@ import ParentAttendance from "../../../src/features/parent/ParentAttendance";
 import ParentHomework from "../../../src/features/parent/ParentHomework";
 import ParentLectures from "../../../src/features/parent/ParentLectures";
 import ParentNotes from "../../../src/features/parent/ParentNotes";
-import ParentTimeline from "../../../src/features/parent/ParentTimeline";
 
 export default function PortalSection() {
   const { role, section } = useLocalSearchParams();
@@ -106,9 +105,6 @@ export default function PortalSection() {
   }
   if (String(role) === "parent" && String(section) === "notes") {
     return <ParentNotes />;
-  }
-  if (String(role) === "parent" && String(section) === "timeline") {
-    return <ParentTimeline />;
   }
   const title = sectionTitle(String(role), String(section));
   return (

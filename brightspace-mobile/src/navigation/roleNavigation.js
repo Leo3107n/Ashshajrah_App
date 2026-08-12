@@ -65,7 +65,7 @@ const EXTRA_ROLE_SECTIONS = Object.freeze({
   // "classes" (the schedule-by-date view) is already served by the Calendar
   // bottom tab (ParentCalendar.js calls the same api.parent.classes endpoint),
   // so it is intentionally not duplicated here.
-  parent: ["attendance", "homework", "lectures", "notes", "timeline"],
+  parent: ["attendance", "homework", "lectures", "notes"],
 });
 const EXTRA_SECTION_TITLES = Object.freeze({
   admissions: "Admissions",
@@ -91,7 +91,6 @@ const EXTRA_SECTION_TITLES = Object.freeze({
   vouchers: "Fee Vouchers",
   classes: "Classes",
   homework: "Homework",
-  timeline: "Timeline",
 });
 
 export function normalizeRole(value) {
