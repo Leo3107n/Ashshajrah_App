@@ -1,10 +1,13 @@
 /** Dynamic fallback that describes supported role sections safely. */
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { StyleSheet, View } from "react-native";
+import api from "../../../src/api";
+import { useAuth } from "../../../src/context/AuthContext";
 import { sectionTitle } from "../../../src/navigation/roleNavigation";
 import { colors, space } from "../../../src/theme";
-import { AppText, Screen, SurfaceCard } from "../../../src/components/ui";
+import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
 import TeacherClasses from "../../../src/features/teacher/TeacherClasses";
 import TeacherLectures from "../../../src/features/teacher/TeacherLectures";
 import TeacherAttendance from "../../../src/features/teacher/TeacherAttendance";
@@ -23,6 +26,7 @@ import StudentProgress from "../../../src/features/student/StudentProgress";
 import StudentNotes from "../../../src/features/student/StudentNotes";
 import StudentNotifications from "../../../src/features/student/StudentNotifications";
 import StudentFees from "../../../src/features/student/StudentFees";
+import MonthlyPlans from "../../../src/features/shared/MonthlyPlans";
 import ParentCalendar from "../../../src/features/parent/ParentCalendar";
 import ParentFees from "../../../src/features/parent/ParentFees";
 import ParentAttendance from "../../../src/features/parent/ParentAttendance";
@@ -33,28 +37,31 @@ import ParentNotes from "../../../src/features/parent/ParentNotes";
 export default function PortalSection() {
   const { role, section } = useLocalSearchParams();
   if (String(role) === "student" && String(section) === "classes") {
-    return <StudentClasses />;
+    return <StudentAccessGate section="classes"><StudentClasses /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "calendar") {
-    return <StudentCalendar />;
+    return <StudentAccessGate section="calendar"><StudentCalendar /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "lectures") {
-    return <StudentLectures />;
+    return <StudentAccessGate section="lectures"><StudentLectures /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "homework") {
-    return <StudentHomework />;
+    return <StudentAccessGate section="homework"><StudentHomework /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "attendance") {
-    return <StudentAttendance />;
+    return <StudentAccessGate section="attendance"><StudentAttendance /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "progress") {
-    return <StudentProgress />;
+    return <StudentAccessGate section="progress"><StudentProgress /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "notes") {
-    return <StudentNotes />;
+    return <StudentAccessGate section="notes"><StudentNotes /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "notifications") {
-    return <StudentNotifications />;
+    return <StudentAccessGate section="notifications"><StudentNotifications /></StudentAccessGate>;
+  }
+  if (String(role) === "student" && String(section) === "monthly-plans") {
+    return <StudentAccessGate section="monthly-plans"><MonthlyPlans audience="student" /></StudentAccessGate>;
   }
   if (String(role) === "student" && String(section) === "fees") {
     return <StudentFees />;
@@ -106,6 +113,9 @@ export default function PortalSection() {
   if (String(role) === "parent" && String(section) === "notes") {
     return <ParentNotes />;
   }
+  if (String(role) === "parent" && String(section) === "monthly-plans") {
+    return <MonthlyPlans audience="parent" />;
+  }
   const title = sectionTitle(String(role), String(section));
   return (
     <Screen contentContainerStyle={styles.content}>
@@ -118,9 +128,81 @@ export default function PortalSection() {
   );
 }
 
+function feeDueLabel(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+function StudentAccessGate({ children, section }) {
+  const router = useRouter();
+  const { isAuthenticating, logout } = useAuth();
+  const [status, setStatus] = useState({ loading: true, locked: false, message: "" });
+
+  useEffect(() => {
+    let mounted = true;
+    api.payment.monthlyFeeStatus()
+      .then((result) => {
+        if (!mounted) return;
+        if (!result?.overdue) {
+          setStatus({ loading: false, locked: false, message: "" });
+          return;
+        }
+        const dueLabel = feeDueLabel(result.due_date);
+        setStatus({
+          loading: false,
+          locked: true,
+          message: dueLabel
+            ? `Fee Deadline was ${dueLabel}. This student section is locked until payment is cleared.`
+            : "Fee Deadline is missed. This student section is locked until payment is cleared.",
+        });
+      })
+      .catch(() => {
+        if (mounted) setStatus({ loading: false, locked: false, message: "" });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [section]);
+
+  if (status.loading) return <DashboardSkeleton message="Checking fee access..." />;
+  if (!status.locked) return children;
+
+  return (
+    <Screen contentContainerStyle={styles.content}>
+      <SurfaceCard style={styles.lockCard}>
+        <View style={styles.icon}>
+          <Ionicons color={colors.error} name="lock-closed-outline" size={26} />
+        </View>
+        <AppText variant="heading">Student portal locked</AppText>
+        <AppText style={styles.body}>{status.message}</AppText>
+        <PillButton
+          icon={<Ionicons color={colors.white} name="wallet-outline" size={18} />}
+          onPress={() => router.push("/(app)/student/fees")}
+          style={styles.lockButton}
+        >
+          View Fees
+        </PillButton>
+        <PillButton
+          icon={<Ionicons color={colors.white} name="log-out-outline" size={18} />}
+          loading={isAuthenticating}
+          onPress={logout}
+          style={styles.lockButton}
+        >
+          Log Out
+        </PillButton>
+      </SurfaceCard>
+    </Screen>
+  );
+}
+
 const styles = StyleSheet.create({
   content: { paddingTop: space.xl },
   card: { alignItems: "flex-start" },
+  lockCard: { alignItems: "flex-start", borderWidth: 1, borderColor: colors.error, backgroundColor: colors.errorContainer },
   icon: { width: 48, height: 48, alignItems: "center", justifyContent: "center", marginBottom: space.md, borderRadius: 24, backgroundColor: colors.goldPale },
   body: { marginTop: space.sm, color: colors.onSurfaceVariant },
+  lockButton: { marginTop: space.lg },
 });

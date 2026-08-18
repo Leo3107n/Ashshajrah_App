@@ -5,7 +5,7 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
@@ -213,11 +213,21 @@ function LectureDetailSheet({ item, onClose }) {
               <Ionicons color={colors.secondary} name="play-circle-outline" size={18} />
               <AppText style={styles.meetText}>A recording is available for this lecture.</AppText>
             </View>
-          ) : item?.google_meet_link ? (
-            <View style={styles.meetRow}>
-              <Ionicons color={colors.secondary} name="videocam-outline" size={18} />
-              <AppText style={styles.meetText}>This class has an online meeting link.</AppText>
-            </View>
+          ) : null}
+          {item?.google_meet_link ? (
+            <>
+              <View style={styles.meetRow}>
+                <Ionicons color={colors.secondary} name="videocam-outline" size={18} />
+                <AppText style={styles.meetText}>Google Meet link is available for this scheduled class.</AppText>
+              </View>
+              <PillButton
+                icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
+                onPress={() => Linking.openURL(item.google_meet_link)}
+                style={styles.meetButton}
+              >
+                Open Google Meet
+              </PillButton>
+            </>
           ) : null}
         </ScrollView>
       </View>
@@ -248,7 +258,7 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   filters: { gap: space.sm, paddingVertical: space.sm },
   subjects: { gap: space.sm, paddingVertical: space.sm },
-  filter: { minWidth: 92, paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  filter: { minWidth: 92, height: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
   filterActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
   filterText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
   filterTextActive: { color: colors.white, fontFamily: fonts.bodyBold },
@@ -282,5 +292,6 @@ const styles = StyleSheet.create({
   detailValue: { marginTop: 3, color: colors.onSurface, fontSize: fontSize.xs, lineHeight: 18 },
   meetRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.lg, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
   meetText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  meetButton: { marginTop: space.md },
 });
 

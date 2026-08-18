@@ -578,6 +578,7 @@ export const paymentApi = {
 export const sharedApi = {
   activeHeadlines: () => get("/api/headlines/active"),
   filePreview: (query) => get("/api/file-preview", query),
+  monthlyPlans: (query) => get("/api/monthly-plans", query),
   notifications: {
     list: (query) => get("/api/notifications", query),
     markRead: (id) => patch("/api/notifications", { id }),
@@ -691,11 +692,11 @@ export const parentApi = {
   attendance: (query) => get("/api/parent/attendance", query),
   homework: (query) => get("/api/parent/homework", query),
   fees: (query) => get("/api/parent/fees", query),
+  notes: (query) => get("/api/parent/notes", query),
   profile: {
     get: (query) => get("/api/parent/profile", query),
     update: (data) => patch("/api/parent/profile", data),
   },
-  timeline: (query) => get("/api/parent/timeline", query),
 };
 
 export const coordinatorApi = {

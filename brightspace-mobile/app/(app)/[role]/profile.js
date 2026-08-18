@@ -1,8 +1,11 @@
 /** Shared identity, secure-session information, and confirmed logout screen. */
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
 import { Alert, StyleSheet, View } from "react-native";
-import { AppText, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
+import api from "../../../src/api";
+import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import TeacherProfile from "../../../src/features/teacher/TeacherProfile";
 import StudentProfile from "../../../src/features/student/StudentProfile";
@@ -38,12 +41,88 @@ function AccountRow({ icon, label, value }) {
   );
 }
 
+function feeDueLabel(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+function StudentProfileAccessGate({ children }) {
+  const router = useRouter();
+  const { isAuthenticating, logout } = useAuth();
+  const [status, setStatus] = useState({ loading: true, locked: false, message: "" });
+
+  useEffect(() => {
+    let mounted = true;
+    api.payment.monthlyFeeStatus()
+      .then((result) => {
+        if (!mounted) return;
+        if (!result?.overdue) {
+          setStatus({ loading: false, locked: false, message: "" });
+          return;
+        }
+        const dueLabel = feeDueLabel(result.due_date);
+        setStatus({
+          loading: false,
+          locked: true,
+          message: dueLabel
+            ? `Fee Deadline was ${dueLabel}. Your student profile is locked until payment is cleared.`
+            : "Fee Deadline is missed. Your student profile is locked until payment is cleared.",
+        });
+      })
+      .catch(() => {
+        if (mounted) setStatus({ loading: false, locked: false, message: "" });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (status.loading) return <DashboardSkeleton message="Checking fee access..." />;
+  if (!status.locked) return children;
+
+  return (
+    <Screen contentContainerStyle={styles.content}>
+      <SurfaceCard style={styles.lockCard}>
+        <View style={styles.lockIcon}>
+          <Ionicons color={colors.error} name="lock-closed-outline" size={26} />
+        </View>
+        <AppText variant="heading">Student profile locked</AppText>
+        <AppText style={styles.body}>{status.message}</AppText>
+        <PillButton
+          icon={<Ionicons color={colors.white} name="wallet-outline" size={18} />}
+          onPress={() => router.push("/(app)/student/fees")}
+          style={styles.lockButton}
+        >
+          View Fees
+        </PillButton>
+        <PillButton
+          icon={<Ionicons color={colors.white} name="log-out-outline" size={18} />}
+          loading={isAuthenticating}
+          onPress={logout}
+          style={styles.lockButton}
+        >
+          Log Out
+        </PillButton>
+      </SurfaceCard>
+    </Screen>
+  );
+}
+
 export default function ProfileScreen() {
   const { isAuthenticating, logout, role, user } = useAuth();
   // Teacher has a dedicated professional profile and assignment view. Other
   // roles retain the shared identity/session screen below.
   if (role === "teacher") return <TeacherProfile />;
-  if (role === "student") return <StudentProfile />;
+  if (role === "student") {
+    return (
+      <StudentProfileAccessGate>
+        <StudentProfile />
+      </StudentProfileAccessGate>
+    );
+  }
   if (role === "parent") return <ParentProfile />;
 
   function confirmLogout() {
@@ -110,6 +189,9 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   content: { paddingTop: space.md },
+  lockCard: { alignItems: "flex-start", borderWidth: 1, borderColor: colors.error, backgroundColor: colors.errorContainer },
+  lockIcon: { width: 48, height: 48, alignItems: "center", justifyContent: "center", marginBottom: space.md, borderRadius: 24, backgroundColor: colors.surface },
+  lockButton: { marginTop: space.lg },
   hero: {
     alignItems: "center",
     padding: space.xl,

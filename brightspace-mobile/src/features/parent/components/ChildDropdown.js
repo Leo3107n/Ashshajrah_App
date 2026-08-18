@@ -1,7 +1,7 @@
 /**
  * Parent child selector. Multi-child parent screens reuse this dropdown so the
- * user can explicitly choose one child before child-specific schedules or
- * timelines are rendered.
+ * user can explicitly choose one child before child-specific schedules,
+ * records, or messages are rendered.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";

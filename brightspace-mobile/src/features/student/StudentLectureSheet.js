@@ -78,11 +78,7 @@ export default function StudentLectureSheet({ lecture, onClose }) {
 
   const detail = item || lecture;
   const status = detail?.display_status || detail?.status;
-  const canJoin =
-    detail?.google_meet_link &&
-    !["cancelled", "missed", "verified_by_coordinator"].includes(
-      String(status || "").toLowerCase()
-    );
+  const hasMeetLink = Boolean(detail?.google_meet_link);
 
   return (
     <Modal
@@ -164,13 +160,13 @@ export default function StudentLectureSheet({ lecture, onClose }) {
                   />
                 ) : null}
 
-                {canJoin ? (
+                {hasMeetLink ? (
                   <PillButton
                     icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
                     onPress={() => Linking.openURL(detail.google_meet_link)}
                     style={styles.action}
                   >
-                    Join Class
+                    Open Google Meet
                   </PillButton>
                 ) : null}
                 {detail?.recording_drive_url ? (

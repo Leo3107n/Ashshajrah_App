@@ -6,8 +6,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import {
   AppText,
@@ -76,8 +76,32 @@ function feeDeadlineBanner(children) {
     : "";
 
   return dueLabel
-    ? `Fee Deadline was ${dueLabel}.`
-    : "Fee Deadline is missed.";
+    ? `Fee Deadline was ${dueLabel} for ${childDisplayName(missed)}.`
+    : `Fee Deadline is missed for ${childDisplayName(missed)}.`;
+}
+
+function dateLabel(value) {
+  if (!value) return "Not set";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Not set";
+  return parsed.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
+function planTone(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "active") return "success";
+  if (status === "upcoming") return "warning";
+  return "neutral";
+}
+
+function pickDashboardPlan(plans) {
+  const items = Array.isArray(plans) ? plans : [];
+  return (
+    items.find((item) => String(item.status).toLowerCase() === "active") ||
+    items.find((item) => String(item.status).toLowerCase() === "upcoming") ||
+    items[0] ||
+    null
+  );
 }
 
 export default function ParentHome() {
@@ -86,6 +110,8 @@ export default function ParentHome() {
   const [data, setData] = useState({
     children: [],
     headlines: [],
+    monthlyPlans: [],
+    monthlyPlanSummary: {},
     notifications: [],
     notificationSummary: {},
   });
@@ -93,24 +119,36 @@ export default function ParentHome() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [selectedChildId, setSelectedChildId] = useState("");
-  const deadlineBanner = useMemo(() => feeDeadlineBanner(data.children), [data.children]);
+  const [childSelectionTouched, setChildSelectionTouched] = useState(false);
+  const initializedChildrenRef = useRef(false);
   const selectedChildren = useMemo(() => {
     if (data.children.length <= 1) return data.children;
+    if (!childSelectionTouched) return [];
     if (!selectedChildId) return [];
     return data.children.filter((child) => child.id === selectedChildId);
-  }, [data.children, selectedChildId]);
+  }, [childSelectionTouched, data.children, selectedChildId]);
+  const deadlineBanner = useMemo(() => {
+    if (data.children.length <= 1) return feeDeadlineBanner(data.children);
+    return childSelectionTouched && selectedChildId ? feeDeadlineBanner(selectedChildren) : null;
+  }, [childSelectionTouched, data.children, selectedChildId, selectedChildren]);
+  const showChildPrompt = data.children.length > 1 && !selectedChildren.length;
+  const dashboardPlan = useMemo(() => pickDashboardPlan(data.monthlyPlans), [data.monthlyPlans]);
+  const visibleSelectedChildId = data.children.length > 1 && !childSelectionTouched ? "" : selectedChildId;
 
   const load = useCallback(async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const [dashboard, notifications] = await Promise.all([
+      const [dashboard, notifications, monthlyPlans] = await Promise.all([
         api.parent.dashboard(),
         api.shared.notifications.list({ limit: 5 }),
+        api.shared.monthlyPlans({ status: "all" }),
       ]);
       setData({
         children: dashboard?.children || [],
         headlines: dashboard?.headlines || [],
+        monthlyPlans: monthlyPlans?.items || [],
+        monthlyPlanSummary: monthlyPlans?.summary || {},
         notifications: notifications?.items || [],
         notificationSummary: notifications?.summary || {},
       });
@@ -127,9 +165,18 @@ export default function ParentHome() {
   useEffect(() => {
     if (data.children.length === 1) {
       setSelectedChildId(data.children[0]?.id || "");
+      setChildSelectionTouched(true);
+      initializedChildrenRef.current = true;
+      return;
+    }
+    if (data.children.length > 1 && !initializedChildrenRef.current) {
+      initializedChildrenRef.current = true;
+      setChildSelectionTouched(false);
+      setSelectedChildId("");
       return;
     }
     if (selectedChildId && data.children.some((child) => child.id === selectedChildId)) return;
+    setChildSelectionTouched(false);
     setSelectedChildId("");
   }, [data.children, selectedChildId]);
 
@@ -191,28 +238,29 @@ export default function ParentHome() {
         </SurfaceCard>
       ) : null}
 
+      <SectionHeader title="Monthly Plan" />
+      <MonthlyPlanPreview
+        item={dashboardPlan}
+        onPress={() => router.push("/(app)/parent/monthly-plans")}
+        summary={data.monthlyPlanSummary}
+      />
+
       {/* Children cards */}
       <SectionHeader title={`${data.children.length} ${data.children.length === 1 ? "Child" : "Children"}`} />
       {data.children.length > 1 ? (
         <ChildDropdown
           children={data.children}
           label="SELECT CHILD"
-          onChange={setSelectedChildId}
+          onChange={(childId) => {
+            setChildSelectionTouched(true);
+            setSelectedChildId(childId);
+          }}
           placeholder="Choose a child to view class schedule"
-          selectedId={selectedChildId}
+          selectedId={visibleSelectedChildId}
         />
       ) : null}
       {data.children.length ? (
-        selectedChildren.length ? (
-          selectedChildren.map((child) => (
-          <ChildCard
-            child={child}
-            key={child.id || childDisplayName(child)}
-            onCalendar={() => router.push("/(app)/parent/calendar")}
-            onFees={() => router.push("/(app)/parent/fees")}
-          />
-          ))
-        ) : data.children.length > 1 ? (
+        showChildPrompt ? (
           <SurfaceCard style={styles.empty}>
             <Ionicons color={colors.secondary} name="chevron-down-circle-outline" size={28} />
             <AppText style={styles.emptyTitle}>Select a child</AppText>
@@ -220,7 +268,16 @@ export default function ParentHome() {
               Choose a child from the dropdown to view that child&apos;s class and lecture schedule.
             </AppText>
           </SurfaceCard>
-        ) : null
+        ) : (
+          selectedChildren.map((child) => (
+            <ChildCard
+              child={child}
+              key={child.id || childDisplayName(child)}
+              onCalendar={() => router.push("/(app)/parent/calendar")}
+              onFees={() => router.push("/(app)/parent/fees")}
+            />
+          ))
+        )
       ) : (
         <SurfaceCard style={styles.empty}>
           <Ionicons color={colors.secondary} name="people-outline" size={28} />
@@ -357,6 +414,7 @@ function ChildCard({ child, onCalendar, onFees }) {
 
       {/* Next class */}
       {nextLecture ? (
+        <>
         <Pressable onPress={onCalendar} style={styles.nextLecture}>
           <View style={styles.nextDot} />
           <View style={styles.nextCopy}>
@@ -371,6 +429,16 @@ function ChildCard({ child, onCalendar, onFees }) {
             {readable(nextLecture.display_status || nextLecture.status)}
           </StatusChip>
         </Pressable>
+        {nextLecture.google_meet_link ? (
+          <PillButton
+            icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
+            onPress={() => Linking.openURL(nextLecture.google_meet_link)}
+            style={styles.meetButton}
+          >
+            Open Google Meet
+          </PillButton>
+        ) : null}
+        </>
       ) : (
         <View style={styles.noCLass}>
           <Ionicons color={colors.outline} name="calendar-clear-outline" size={15} />
@@ -427,6 +495,66 @@ function QuickAction({ icon, label, onPress }) {
   );
 }
 
+function MonthlyPlanPreview({ item, onPress, summary }) {
+  const mediaCount = Array.isArray(item?.media)
+    ? item.media.length
+    : Array.isArray(item?.image_urls)
+      ? item.image_urls.length
+      : 0;
+
+  if (!item) {
+    return (
+      <SurfaceCard style={styles.planPreview}>
+        <View style={styles.planPreviewTop}>
+          <View style={styles.planIcon}>
+            <Ionicons color={colors.secondary} name="calendar-number-outline" size={22} />
+          </View>
+          <View style={styles.planCopy}>
+            <AppText style={styles.planTitle}>No monthly plan yet</AppText>
+            <AppText style={styles.planDate}>
+              Plans uploaded by the academy will appear here.
+            </AppText>
+          </View>
+        </View>
+      </SurfaceCard>
+    );
+  }
+
+  return (
+    <Pressable onPress={onPress}>
+      <SurfaceCard style={styles.planPreview}>
+        <View style={styles.planPreviewTop}>
+          <View style={styles.planIcon}>
+            <Ionicons color={colors.secondary} name="calendar-number-outline" size={22} />
+          </View>
+          <View style={styles.planCopy}>
+            <AppText style={styles.planEyebrow}>STUDY MONTHLY PLAN</AppText>
+            <AppText style={styles.planTitle}>{item.name || "Monthly Plan"}</AppText>
+            <AppText style={styles.planDate}>
+              {dateLabel(item.start_date)} to {dateLabel(item.end_date)}
+            </AppText>
+          </View>
+          <StatusChip tone={planTone(item.status)}>{readable(item.status)}</StatusChip>
+        </View>
+        <View style={styles.planMetaRow}>
+          <View style={styles.planMeta}>
+            <Ionicons color={colors.primary} name="attach-outline" size={16} />
+            <AppText style={styles.planMetaText}>{mediaCount} resources</AppText>
+          </View>
+          <View style={styles.planMeta}>
+            <Ionicons color={colors.primary} name="albums-outline" size={16} />
+            <AppText style={styles.planMetaText}>{summary?.total || 0} total plans</AppText>
+          </View>
+        </View>
+        <View style={styles.planFooter}>
+          <AppText style={styles.planFooterText}>Tap to open images, videos, and all plans</AppText>
+          <Ionicons color={colors.secondary} name="arrow-forward-outline" size={17} />
+        </View>
+      </SurfaceCard>
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   content: { paddingTop: space.md, paddingBottom: space.xl },
   hero: { padding: space.xl, borderRadius: radius["2xl"], ...shadows.hero },
@@ -456,6 +584,7 @@ const styles = StyleSheet.create({
   nextCopy: { flex: 1 },
   nextSubject: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   nextTime: { color: colors.onSurfaceVariant, fontSize: 9 },
+  meetButton: { marginTop: space.sm },
   noCLass: { flexDirection: "row", alignItems: "center", marginTop: space.md, padding: space.sm },
   noClassText: { marginLeft: space.sm, color: colors.outline, fontSize: fontSize.xs },
   childActions: { flexDirection: "row", marginTop: space.md, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.borderGreen },
@@ -469,6 +598,18 @@ const styles = StyleSheet.create({
   quick: { width: "31%", minHeight: 86, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
   quickIcon: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.goldPale },
   quickLabel: { marginTop: space.xs, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: 10 },
+  planPreview: { gap: space.md },
+  planPreviewTop: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  planIcon: { width: 46, height: 46, alignItems: "center", justifyContent: "center", borderRadius: 23, backgroundColor: colors.goldPale },
+  planCopy: { flex: 1 },
+  planEyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1 },
+  planTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.base },
+  planDate: { marginTop: 2, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  planMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  planMeta: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.surfaceLow },
+  planMetaText: { marginLeft: space.xs, color: colors.primary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  planFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.borderGreen },
+  planFooterText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   stack: { gap: space.sm },
   announcement: { flexDirection: "row", padding: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.lg, backgroundColor: colors.surface },
   announcementIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: colors.goldPale },

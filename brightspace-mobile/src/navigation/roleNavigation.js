@@ -53,7 +53,7 @@ const EXTRA_ROLE_SECTIONS = Object.freeze({
   superadmin: ["admissions", "admission-review", "communications", "reports", "audit", "profile", "career-applications"],
   // These Student workspaces are reached from dashboard cards and detail
   // links instead of consuming another slot in the five-item bottom bar.
-  student: ["lectures", "attendance", "progress", "notes", "notifications", "fees"],
+  student: ["lectures", "attendance", "progress", "notes", "notifications", "fees", "monthly-plans"],
   // Teachers receive only their operational completion-report workspace.
   // Generic administrative reporting remains limited to Admin/Super Admin.
   // Homework approval already lives inside the "homework" tab's "To Review"
@@ -65,7 +65,7 @@ const EXTRA_ROLE_SECTIONS = Object.freeze({
   // "classes" (the schedule-by-date view) is already served by the Calendar
   // bottom tab (ParentCalendar.js calls the same api.parent.classes endpoint),
   // so it is intentionally not duplicated here.
-  parent: ["attendance", "homework", "lectures", "notes"],
+  parent: ["attendance", "homework", "lectures", "notes", "monthly-plans"],
 });
 const EXTRA_SECTION_TITLES = Object.freeze({
   admissions: "Admissions",
@@ -82,6 +82,7 @@ const EXTRA_SECTION_TITLES = Object.freeze({
   fees: "Fees",
   notes: "Notes",
   notifications: "Notifications",
+  "monthly-plans": "Monthly Plans",
   "career-applications": "Careers Applications",
   students: "Students",
   "internal-events": "Internal Events",

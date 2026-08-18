@@ -8,6 +8,12 @@ import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 import StudentLectureSheet, { lectureDate, lectureTone, readable } from "./StudentLectureSheet";
 
+const PERIODS = [
+  ["selected_date", "Day"],
+  ["selected_week", "Week"],
+  ["selected_month", "Month"],
+];
+
 function localDateKey(date = new Date()) {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -17,6 +23,7 @@ function localDateKey(date = new Date()) {
 
 export default function StudentCalendar() {
   const [selectedDate, setSelectedDate] = useState(localDateKey());
+  const [period, setPeriod] = useState("selected_date");
   const [subjectId, setSubjectId] = useState("");
   const [data, setData] = useState({ items: [], subjects: [], markedDates: [] });
   const [selectedLecture, setSelectedLecture] = useState(null);
@@ -29,7 +36,7 @@ export default function StudentCalendar() {
     setError("");
     try {
       const response = await api.student.calendarLectures({
-        range: "selected_date",
+        range: period,
         date: selectedDate,
         subjectId: subjectId || undefined,
       });
@@ -44,7 +51,7 @@ export default function StudentCalendar() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedDate, subjectId]);
+  }, [period, selectedDate, subjectId]);
 
   useEffect(() => {
     load();
@@ -97,6 +104,12 @@ export default function StudentCalendar() {
           />
         </SurfaceCard>
 
+        <ScrollView contentContainerStyle={styles.periods} horizontal showsHorizontalScrollIndicator={false}>
+          {PERIODS.map(([value, label]) => (
+            <Filter active={period === value} key={value} label={label} onPress={() => setPeriod(value)} />
+          ))}
+        </ScrollView>
+
         <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
           <Filter active={!subjectId} label="All Subjects" onPress={() => setSubjectId("")} />
           {data.subjects.map((subject) => (
@@ -106,7 +119,7 @@ export default function StudentCalendar() {
 
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Lectures</AppText>
-          <AppText style={styles.count}>{data.items.length} scheduled</AppText>
+          <AppText style={styles.count}>{data.items.length} scheduled this {period === "selected_date" ? "day" : period === "selected_week" ? "week" : "month"}</AppText>
         </View>
 
         {error ? (
@@ -122,8 +135,8 @@ export default function StudentCalendar() {
         ) : (
           <SurfaceCard style={styles.empty}>
             <Ionicons color={colors.secondary} name="calendar-clear-outline" size={30} />
-            <AppText style={styles.emptyTitle}>No lectures on this date</AppText>
-            <AppText style={styles.emptyText}>Select another marked date to view its schedule.</AppText>
+            <AppText style={styles.emptyTitle}>No lectures in this period</AppText>
+            <AppText style={styles.emptyText}>Select another marked date, week, or month to view its schedule.</AppText>
           </SurfaceCard>
         )}
       </Screen>
@@ -171,7 +184,8 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.1 },
   subtitle: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   calendarCard: { padding: space.xs, overflow: "hidden" },
-  filters: { gap: space.sm, paddingVertical: space.lg },
+  periods: { gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm },
+  filters: { gap: space.sm, paddingBottom: space.lg },
   filter: { paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
   filterActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
   filterText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },

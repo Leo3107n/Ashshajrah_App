@@ -6,7 +6,7 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import api from "../../api";
 import {
@@ -20,6 +20,12 @@ import {
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
+
+const PERIODS = [
+  ["selected_date", "Day"],
+  ["selected_week", "Week"],
+  ["selected_month", "Month"],
+];
 
 function localDateKey(date = new Date()) {
   const y = date.getFullYear();
@@ -47,6 +53,7 @@ function lectureTone(value) {
 
 export default function ParentCalendar() {
   const [selectedDate, setSelectedDate] = useState(localDateKey());
+  const [period, setPeriod] = useState("selected_date");
   const [childFilter, setChildFilter] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("");
   const [data, setData] = useState({ items: [], children: [], subjects: [], markedDates: [] });
@@ -60,6 +67,7 @@ export default function ParentCalendar() {
     setError("");
     try {
       const response = await api.parent.classes({
+        range: period,
         date: selectedDate,
         childId: childFilter || undefined,
         subjectId: subjectFilter || undefined,
@@ -76,13 +84,13 @@ export default function ParentCalendar() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [selectedDate, childFilter, subjectFilter]);
+  }, [period, selectedDate, childFilter, subjectFilter]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     setSelectedLecture(null);
-  }, [selectedDate, childFilter, subjectFilter]);
+  }, [period, selectedDate, childFilter, subjectFilter]);
 
   useEffect(() => {
     if (data.children.length === 1) {
@@ -151,6 +159,21 @@ export default function ParentCalendar() {
           />
         </SurfaceCard>
 
+        <ScrollView
+          contentContainerStyle={styles.periods}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+        >
+          {PERIODS.map(([value, label]) => (
+            <FilterChip
+              active={period === value}
+              key={value}
+              label={label}
+              onPress={() => setPeriod(value)}
+            />
+          ))}
+        </ScrollView>
+
         {/* Child filter */}
         {data.children.length > 1 ? (
           <ChildDropdown
@@ -187,7 +210,7 @@ export default function ParentCalendar() {
 
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Classes</AppText>
-          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled</AppText>
+          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled this {period === "selected_date" ? "day" : period === "selected_week" ? "week" : "month"}</AppText>
         </View>
 
         {error ? (
@@ -209,9 +232,9 @@ export default function ParentCalendar() {
         ) : (
           <SurfaceCard style={styles.state}>
             <Ionicons color={colors.secondary} name="calendar-clear-outline" size={30} />
-            <AppText style={styles.stateTitle}>No classes on this date</AppText>
+            <AppText style={styles.stateTitle}>No classes in this period</AppText>
             <AppText style={styles.stateText}>
-              Select another marked date to view the schedule.
+              Select another marked date, week, or month to view the schedule.
             </AppText>
           </SurfaceCard>
         )}
@@ -313,10 +336,19 @@ function LectureDetailSheet({ item, onClose }) {
             <Detail icon="document-text-outline" label="About" value={item.description} />
           ) : null}
           {item?.google_meet_link ? (
-            <View style={styles.meetRow}>
-              <Ionicons color={colors.secondary} name="videocam-outline" size={18} />
-              <AppText style={styles.meetText}>This class has an online meeting link.</AppText>
-            </View>
+            <>
+              <View style={styles.meetRow}>
+                <Ionicons color={colors.secondary} name="videocam-outline" size={18} />
+                <AppText style={styles.meetText}>Google Meet link is available for this scheduled class.</AppText>
+              </View>
+              <PillButton
+                icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
+                onPress={() => Linking.openURL(item.google_meet_link)}
+                style={styles.meetButton}
+              >
+                Open Google Meet
+              </PillButton>
+            </>
           ) : null}
         </ScrollView>
       </View>
@@ -357,6 +389,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.1 },
   subtitle: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   calendarCard: { padding: space.xs, overflow: "hidden" },
+  periods: { gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm },
   filters: { gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm },
   subFilters: { gap: space.sm, paddingBottom: space.sm },
   chip: { paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
@@ -398,4 +431,5 @@ const styles = StyleSheet.create({
   detailValue: { marginTop: 3, color: colors.onSurface, fontSize: fontSize.xs, lineHeight: 18 },
   meetRow: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.lg, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
   meetText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  meetButton: { marginTop: space.md },
 });

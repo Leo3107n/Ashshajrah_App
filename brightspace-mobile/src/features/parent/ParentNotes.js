@@ -43,14 +43,14 @@ export default function ParentNotes() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const [timeline, threads] = await Promise.all([
-        api.parent.timeline({ childId: childId || undefined }),
+      const [notesResponse, threads] = await Promise.all([
+        api.parent.notes({ childId: childId || undefined }),
         api.shared.notes.threads({ childId: childId || undefined }),
       ]);
       setData({
-        notes: timeline?.notes || [],
+        notes: notesResponse?.notes || [],
         threads: threads?.items || [],
-        children: timeline?.children || [],
+        children: notesResponse?.children || [],
       });
     } catch (nextError) {
       setError(nextError?.message || "Unable to load communications.");
@@ -58,7 +58,6 @@ export default function ParentNotes() {
       setLoading(false);
       setRefreshing(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [childId]);
 
   useEffect(() => {
@@ -116,7 +115,7 @@ export default function ParentNotes() {
             <PillButton onPress={() => load()} style={styles.retry}>Try Again</PillButton>
           </SurfaceCard>
         ) : requiresChildSelection ? (
-          <ChildSelectionState message="Choose a child from the dropdown to view that child’s notes and messages." />
+          <ChildSelectionState message="Choose a child from the dropdown to view that child's notes and messages." />
         ) : tab === "notes" ? (
           <NotesList items={data.notes} />
         ) : data.threads.length ? (
@@ -283,10 +282,6 @@ function Tab({ active, count, icon, label, onPress }) {
   );
 }
 
-function Chip({ active, label, onPress }) {
-  return <Pressable onPress={onPress} style={[styles.chip, active && styles.chipActive]}><AppText style={[styles.chipText, active && styles.chipTextActive]}>{label}</AppText></Pressable>;
-}
-
 function Empty({ icon, text, title }) {
   return (
     <SurfaceCard style={styles.state}>
@@ -302,11 +297,6 @@ const styles = StyleSheet.create({
   heading: { marginBottom: space.md },
   eyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.1 },
   subtitle: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
-  childFilters: { gap: space.sm, paddingTop: space.md },
-  chip: { paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
-  chipActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
-  chipText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
-  chipTextActive: { color: colors.white, fontFamily: fonts.bodyBold },
   tabs: { flexDirection: "row", gap: space.sm, marginTop: space.md },
   tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: 44, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.full, backgroundColor: colors.surface },
   tabActive: { backgroundColor: colors.primaryContainer, borderColor: colors.primaryContainer },

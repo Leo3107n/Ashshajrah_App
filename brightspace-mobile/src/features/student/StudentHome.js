@@ -52,17 +52,28 @@ function readable(value) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function feeTone(status) {
-  const value = String(status || "").toLowerCase();
-  if (value === "verified") return "success";
-  if (value === "pending") return "warning";
-  if (value === "rejected") return "danger";
-  return "neutral";
+function dateLabel(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString([], {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function overdueFeeMessage(status) {
+  if (!status?.overdue) return "";
+  const dueLabel = dateLabel(status.due_date);
+  return dueLabel
+    ? `Fee Deadline was ${dueLabel}. Your student portal is locked until payment is cleared.`
+    : "Fee Deadline is missed. Your student portal is locked until payment is cleared.";
 }
 
 export default function StudentHome() {
   const router = useRouter();
-  const { user } = useAuth();
+  const { isAuthenticating, logout, user } = useAuth();
   const [data, setData] = useState({
     stats: {},
     headlines: [],
@@ -70,6 +81,7 @@ export default function StudentHome() {
     notes: [],
     notifications: [],
     notificationSummary: {},
+    monthlyFee: null,
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,11 +97,12 @@ export default function StudentHome() {
     setError("");
 
     try {
-      const [dashboard, calendar, timeline, notifications] = await Promise.all([
+      const [dashboard, calendar, timeline, notifications, monthlyFee] = await Promise.all([
         api.student.dashboard(),
         api.student.calendarLectures({ range: "today" }),
         api.student.timeline({ range: "all" }),
         api.shared.notifications.list({ limit: 5 }),
+        api.payment.monthlyFeeStatus(),
       ]);
 
       setData({
@@ -99,6 +112,7 @@ export default function StudentHome() {
         notes: timeline?.notes || [],
         notifications: notifications?.items || [],
         notificationSummary: notifications?.summary || {},
+        monthlyFee,
       });
     } catch (nextError) {
       setError(nextError?.message || "Unable to load your dashboard.");
@@ -121,6 +135,8 @@ export default function StudentHome() {
       ) || data.lectures[0],
     [data.lectures]
   );
+  const lockMessage = overdueFeeMessage(data.monthlyFee);
+  const isPortalLocked = Boolean(lockMessage);
 
   const tiles = [
     {
@@ -150,6 +166,13 @@ export default function StudentHome() {
       icon: "wallet-outline",
       tone: "mint",
       section: "fees",
+    },
+    {
+      label: "Monthly Plan",
+      value: "Study Resources",
+      icon: "calendar-number-outline",
+      tone: "gold",
+      section: "monthly-plans",
     },
   ];
 
@@ -216,6 +239,37 @@ export default function StudentHome() {
           </Pressable>
         </View>
       </LinearGradient>
+
+      {isPortalLocked ? (
+        <SurfaceCard style={styles.lockBanner}>
+          <View style={styles.lockIcon}>
+            <Ionicons color={colors.error} name="lock-closed-outline" size={24} />
+          </View>
+          <View style={styles.lockCopy}>
+            <AppText style={styles.lockEyebrow}>FEE OVERDUE</AppText>
+            <AppText style={styles.lockTitle}>Student portal locked</AppText>
+            <AppText style={styles.lockText}>{lockMessage}</AppText>
+            <PillButton
+              icon={<Ionicons color={colors.white} name="wallet-outline" size={18} />}
+              onPress={() => go("fees")}
+              style={styles.lockButton}
+            >
+              View Fees
+            </PillButton>
+            <PillButton
+              icon={<Ionicons color={colors.white} name="log-out-outline" size={18} />}
+              loading={isAuthenticating}
+              onPress={logout}
+              style={styles.lockButton}
+            >
+              Log Out
+            </PillButton>
+          </View>
+        </SurfaceCard>
+      ) : null}
+
+      {isPortalLocked ? null : (
+        <>
 
       <Pressable onPress={() => go("lectures")}>
         <SurfaceCard style={styles.nextCard}>
@@ -299,7 +353,7 @@ export default function StudentHome() {
                   {lecture.subject_name || lecture.title}
                 </AppText>
                 <AppText style={styles.scheduleTime}>
-                  {time(lecture.scheduled_start)} – {time(lecture.scheduled_end)}
+                  {time(lecture.scheduled_start)} - {time(lecture.scheduled_end)}
                 </AppText>
               </View>
               <Ionicons color={colors.outline} name="chevron-forward" size={18} />
@@ -334,7 +388,7 @@ export default function StudentHome() {
                   {note.teacher_name || "Teacher"}
                 </AppText>
                 <AppText numberOfLines={3} style={styles.noteText}>
-                  “{note.note}”
+                  {`"${note.note}"`}
                 </AppText>
               </View>
             </Pressable>
@@ -414,6 +468,9 @@ export default function StudentHome() {
           />
         )}
       </View>
+
+        </>
+      )}
     </Screen>
   );
 }
@@ -460,7 +517,7 @@ function SectionHeader({ badge, onPress, title }) {
       </View>
       {onPress ? (
         <Pressable accessibilityLabel={`View all ${title}`} onPress={onPress}>
-          <AppText style={styles.viewAll}>View All →</AppText>
+          <AppText style={styles.viewAll}>View All -&gt;</AppText>
         </Pressable>
       ) : null}
     </View>
@@ -513,6 +570,42 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: colors.gold,
   },
+  lockBanner: {
+    flexDirection: "row",
+    marginTop: space.md,
+    borderWidth: 1,
+    borderColor: colors.error,
+    backgroundColor: colors.errorContainer,
+  },
+  lockIcon: {
+    width: 48,
+    height: 48,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 24,
+    backgroundColor: colors.surface,
+  },
+  lockCopy: { flex: 1, marginLeft: space.md },
+  lockEyebrow: {
+    color: colors.error,
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.1,
+  },
+  lockTitle: {
+    marginTop: 2,
+    color: colors.primary,
+    fontFamily: fonts.display,
+    fontSize: fontSize.xl,
+  },
+  lockText: {
+    marginTop: space.xs,
+    color: colors.error,
+    fontFamily: fonts.bodySemibold,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+  },
+  lockButton: { marginTop: space.md },
   nextCard: {
     marginTop: space.md,
     marginHorizontal: space.sm,

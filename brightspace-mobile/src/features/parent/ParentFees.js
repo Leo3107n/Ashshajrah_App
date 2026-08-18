@@ -62,6 +62,10 @@ function labelFor(state) {
   return map[state] || "Pending";
 }
 
+function voucherType(item) {
+  return item?.is_monthly_voucher ? "Monthly Fee" : "Fee Voucher";
+}
+
 export default function ParentFees() {
   const [items, setItems] = useState([]);
   const [children, setChildren] = useState([]);
@@ -295,6 +299,7 @@ function VoucherCard({ item, onPress }) {
           </AppText>
           <StatusChip tone={toneFor(state)}>{labelFor(state)}</StatusChip>
         </View>
+        <AppText style={styles.typeLabel}>{voucherType(item)}</AppText>
         <AppText style={styles.cardAmount}>{money(item.amount)}</AppText>
         <View style={styles.cardMeta}>
           <AppText style={styles.metaText}>Due {date(item.due_date)}</AppText>
@@ -323,6 +328,7 @@ function VoucherSheet({ item, onClose }) {
             <View style={styles.sheetHeading}>
               <AppText style={styles.eyebrow}>VOUCHER DETAILS</AppText>
               <AppText variant="heading">{item.voucher_no}</AppText>
+              <AppText style={styles.sheetType}>{voucherType(item)}</AppText>
               {item.student_name ? (
                 <AppText style={styles.sheetChild}>{item.student_name}</AppText>
               ) : null}
@@ -403,6 +409,7 @@ const styles = StyleSheet.create({
   cardCopy: { flex: 1, marginHorizontal: space.md },
   cardTop: { flexDirection: "row", alignItems: "center", gap: space.sm },
   voucher: { flex: 1, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  typeLabel: { marginTop: 3, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
   cardAmount: { marginTop: 3, color: colors.primary, fontFamily: fonts.displayBold, fontSize: fontSize.lg },
   cardMeta: { flexDirection: "row", justifyContent: "space-between", gap: space.sm, marginTop: 4 },
   metaText: { flexShrink: 1, color: colors.outline, fontSize: 9 },
@@ -416,6 +423,7 @@ const styles = StyleSheet.create({
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
   sheetHeader: { flexDirection: "row", alignItems: "center", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
+  sheetType: { marginTop: 3, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   sheetChild: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },
   detailTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.lg },
