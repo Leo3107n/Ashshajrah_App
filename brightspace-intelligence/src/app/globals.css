@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+:root {
+  --background: #faf7f0;
+  --foreground: #063f32;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-emerald-deep: #0d3b2e;
+  --color-emerald-dark: #063f32;
+  --color-emerald: #1a5c45;
+  --color-emerald-mid: #0d5c48;
+  --color-emerald-light: #2d8a6a;
+  --color-gold: #c9a227;
+  --color-gold-soft: #e8d5a3;
+  --color-cream: #faf7f0;
+  --color-cream-dark: #f0ebe0;
+  --color-warm-brown: #5c4a32;
+
+  --font-sans: var(--font-outfit);
+  --font-body: var(--font-outfit);
+  --font-display: var(--font-cormorant);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+h1,
+h2,
+.font-display {
+  font-family: Georgia, "Times New Roman", serif;
+}
+
+h3,
+h4,
+h5,
+h6,
+p,
+span,
+label,
+button,
+input,
+select,
+textarea,
+.font-body {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+.font-body {
+  font-family: var(--font-outfit), system-ui, sans-serif;
+}
+
+::selection {
+  background: rgba(45, 138, 106, 0.3);
+  color: #063f32;
+}
+
+.ash-book-page-left {
+  animation: ash-leftPage 1.8s ease-in-out infinite;
+}
+
+.ash-book-page-right {
+  animation: ash-rightPage 1.8s ease-in-out infinite;
+}
+
+.ash-book-line-bar {
+  animation: ash-bookLine 1.8s ease-in-out infinite;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2d8a6a #f1eadc;
+}
+
+*::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #f1eadc;
+}
+
+*::-webkit-scrollbar-thumb {
+  border: 3px solid #f1eadc;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #0d5c48, #2d8a6a);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #063f32, #0d5c48);
+}
+
+@keyframes ash-leftPage {
+  0%,
+  100% {
+    transform: rotateY(0deg);
+  }
+
+  50% {
+    transform: rotateY(22deg);
+  }
+}
+
+@keyframes ash-rightPage {
+  0%,
+  100% {
+    transform: rotateY(0deg);
+  }
+
+  50% {
+    transform: rotateY(-22deg);
+  }
+}
+
+@keyframes ash-bookLine {
+  0% {
+    transform: translateX(-110%);
+  }
+
+  100% {
+    transform: translateX(250%);
+  }
+}

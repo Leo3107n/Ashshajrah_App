@@ -1,4 +1,6 @@
 .local-backups/
+design-reference/
+brightspace-intelligence.git-backup/
 
 # Local environment and secret material
 **/.env
@@ -39,6 +41,7 @@
 # Local tool state, caches, and logs
 .codex/
 .agents/
+**/node_modules/
 **/.expo/
 **/.next/
 **/.vercel/

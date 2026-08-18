@@ -1,0 +1,718 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Role {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String    @unique @db.VarChar(50)
+  description String?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id                                                                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  role_id                                                                  String                     @db.Uuid
+  full_name                                                                String                     @db.VarChar(150)
+  email                                                                    String?                    @unique(map: "users_email_unique") @db.VarChar(150)
+  phone                                                                    String?                    @unique(map: "users_phone_unique") @db.VarChar(50)
+  password_hash                                                            String?
+  status                                                                   user_status                @default(pending)
+  must_change_password                                                     Boolean?                   @default(true)
+  last_login_at                                                            DateTime?                  @db.Timestamp(6)
+  created_at                                                               DateTime?                  @default(now()) @db.Timestamp(6)
+  updated_at                                                               DateTime?                  @default(now()) @db.Timestamp(6)
+  username                                                                 String?
+  audit_logs                                                               audit_logs[]
+  coordinator_profiles                                                     coordinator_profiles?
+  credential_dispatch_logs_credential_dispatch_logs_parent_user_idTousers  credential_dispatch_logs[] @relation("credential_dispatch_logs_parent_user_idTousers")
+  credential_dispatch_logs_credential_dispatch_logs_student_user_idTousers credential_dispatch_logs[] @relation("credential_dispatch_logs_student_user_idTousers")
+  fee_submissions                                                          fee_submissions[]
+  fee_verifications                                                        fee_verifications[]
+  fee_vouchers                                                             fee_vouchers[]
+  interested_students                                                      interested_students[]
+  lecture_attendance                                                       lecture_attendance[]
+  lecture_schedules                                                        lecture_schedules[]
+  lecture_verifications                                                    lecture_verifications[]
+  notifications                                                            notifications[]
+  outbound_messages                                                        outbound_messages[]
+  parent_profiles                                                          parent_profiles?
+  student_profiles                                                         student_profiles?
+  teacher_assignments                                                      teacher_assignments[]
+  teacher_profiles                                                         teacher_profiles?
+  role                                                                     Role                       @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([role_id], map: "idx_users_role_id")
+  @@index([status], map: "idx_users_status")
+  @@map("users")
+}
+
+model audit_logs {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  actor_user_id String?   @db.Uuid
+  action        String    @db.VarChar(150)
+  entity_type   String    @db.VarChar(100)
+  entity_id     String?   @db.Uuid
+  old_data      Json?
+  new_data      Json?
+  created_at    DateTime? @default(now()) @db.Timestamp(6)
+  users         User?     @relation(fields: [actor_user_id], references: [id], onUpdate: NoAction)
+
+  @@index([actor_user_id], map: "idx_audit_logs_actor")
+}
+
+model coordinator_profiles {
+  id         String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String       @unique @db.Uuid
+  department String?      @db.VarChar(150)
+  status     user_status? @default(active)
+  created_at DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at DateTime?    @default(now()) @db.Timestamp(6)
+  users      User         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model course_subjects {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  course_id  String   @db.Uuid
+  subject_id String   @db.Uuid
+  courses    courses  @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subjects   subjects @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([course_id, subject_id], map: "course_subject_unique")
+}
+
+model courses {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title               String                @db.VarChar(150)
+  class_level         String?               @unique(map: "courses_class_level_unique") @db.VarChar(100)
+  description         String?
+  status              user_status?          @default(active)
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  course_subjects     course_subjects[]
+  enrollments         enrollments[]
+  regular_fee         regular_fee?
+  teacher_assignments teacher_assignments[]
+}
+
+model credential_dispatch_logs {
+  id                                                    String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  registration_id                                       String?             @db.Uuid
+  parent_user_id                                        String?             @db.Uuid
+  student_user_id                                       String?             @db.Uuid
+  sent_to_email                                         String?             @db.VarChar(150)
+  sent_to_phone                                         String?             @db.VarChar(50)
+  channel                                               String?             @db.VarChar(100)
+  status                                                String?             @default("pending") @db.VarChar(100)
+  error_message                                         String?
+  sent_at                                               DateTime?           @db.Timestamp(6)
+  created_at                                            DateTime?           @default(now()) @db.Timestamp(6)
+  users_credential_dispatch_logs_parent_user_idTousers  User?               @relation("credential_dispatch_logs_parent_user_idTousers", fields: [parent_user_id], references: [id], onUpdate: NoAction)
+  registration_leads                                    registration_leads? @relation(fields: [registration_id], references: [id], onUpdate: NoAction)
+  users_credential_dispatch_logs_student_user_idTousers User?               @relation("credential_dispatch_logs_student_user_idTousers", fields: [student_user_id], references: [id], onUpdate: NoAction)
+}
+
+model discounts {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  label        String         @unique
+  percent      Decimal        @db.Decimal(5, 2)
+  status       String         @default("active")
+  created_at   DateTime       @default(now()) @db.Timestamp(6)
+  fee_vouchers fee_vouchers[]
+}
+
+model enrollments {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  student_id         String              @db.Uuid
+  course_id          String              @db.Uuid
+  registration_id    String?             @db.Uuid
+  start_date         DateTime            @default(dbgenerated("CURRENT_DATE")) @db.Date
+  end_date           DateTime?           @db.Date
+  status             String              @default("active") @db.VarChar(50)
+  created_at         DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?           @default(now()) @db.Timestamp(6)
+  courses            courses             @relation(fields: [course_id], references: [id], onUpdate: NoAction)
+  registration_leads registration_leads? @relation(fields: [registration_id], references: [id], onUpdate: NoAction)
+  student_profiles   student_profiles    @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  lecture_schedules  lecture_schedules[]
+
+  @@unique([student_id, course_id], map: "enrollment_student_course_unique")
+  @@index([course_id], map: "idx_enrollments_course_id")
+  @@index([student_id], map: "idx_enrollments_student_id")
+}
+
+model fee_settings {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name        String
+  key         String   @unique
+  value       String   @default("")
+  description String?
+  status      String   @default("active")
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+  label       String?
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fee_submissions {
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voucher_id        String                @db.Uuid
+  submitted_by      String?               @db.Uuid
+  payer_name        String?               @db.VarChar(150)
+  transaction_id    String?               @db.VarChar(150)
+  paid_amount       Decimal               @db.Decimal(12, 2)
+  paid_at           DateTime?             @db.Timestamp(6)
+  proof_bucket      String?               @default("payment_proofs") @db.VarChar(100)
+  proof_file_path   String
+  proof_file_url    String?
+  remarks           String?
+  created_at        DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?             @default(now()) @db.Timestamp(6)
+  status            fee_submission_status @default(pending)
+  users             User?                 @relation(fields: [submitted_by], references: [id], onUpdate: NoAction)
+  fee_vouchers      fee_vouchers          @relation(fields: [voucher_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  fee_verifications fee_verifications[]
+
+  @@index([voucher_id], map: "idx_fee_submissions_voucher_id")
+}
+
+model fee_verifications {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  fee_submission_id String          @db.Uuid
+  verified_by       String          @db.Uuid
+  reason            String?
+  verified_at       DateTime?       @default(now()) @db.Timestamp(6)
+  fee_submissions   fee_submissions @relation(fields: [fee_submission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users             User            @relation(fields: [verified_by], references: [id], onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model fee_vouchers {
+  id                   String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voucher_no           String               @unique @db.VarChar(100)
+  registration_id      String?              @db.Uuid
+  student_id           String?              @db.Uuid
+  amount               Decimal              @db.Decimal(12, 2)
+  due_date             DateTime             @db.Date
+  payment_method       payment_method?      @default(bank)
+  payment_instructions String?
+  status               voucher_status       @default(unpaid)
+  created_by           String?              @db.Uuid
+  created_at           DateTime?            @default(now()) @db.Timestamp(6)
+  updated_at           DateTime?            @default(now()) @db.Timestamp(6)
+  registration_lead_id String?              @db.Uuid
+  regular_fee_applied  Boolean              @default(false)
+  regular_fee_amount   Decimal              @default(0) @db.Decimal(12, 2)
+  admission_fee_amount Decimal              @default(0) @db.Decimal(12, 2)
+  discount_id          String?              @db.Uuid
+  discount_percent     Decimal              @default(0) @db.Decimal(5, 2)
+  subtotal_amount      Decimal              @default(0) @db.Decimal(12, 2)
+  discount_amount      Decimal              @default(0) @db.Decimal(12, 2)
+  total_amount         Decimal              @default(0) @db.Decimal(12, 2)
+  payment_method_id    String?              @db.Uuid
+  regular_fee_id       String?              @db.Uuid
+  fee_submissions      fee_submissions[]
+  users                User?                @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+  discounts            discounts?           @relation(fields: [discount_id], references: [id], onUpdate: NoAction)
+  payment_methods      payment_methods?     @relation(fields: [payment_method_id], references: [id], onUpdate: NoAction)
+  registration_leads   registration_leads?  @relation(fields: [registration_id], references: [id], onUpdate: NoAction)
+  regular_fee          regular_fee?         @relation(fields: [regular_fee_id], references: [id], onUpdate: NoAction)
+  student_profiles     student_profiles?    @relation(fields: [student_id], references: [id], onUpdate: NoAction)
+  voucher_line_items   voucher_line_items[]
+
+  @@index([registration_id], map: "idx_fee_vouchers_registration_id")
+  @@index([status], map: "idx_fee_vouchers_status")
+  @@index([student_id], map: "idx_fee_vouchers_student_id")
+}
+
+model homework {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lecture_id        String?            @db.Uuid
+  student_id        String             @db.Uuid
+  teacher_id        String             @db.Uuid
+  subject_id        String             @db.Uuid
+  title             String             @db.VarChar(200)
+  description       String?
+  due_date          DateTime?          @db.Date
+  status            homework_status?   @default(pending)
+  created_at        DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?          @default(now()) @db.Timestamp(6)
+  lecture_schedules lecture_schedules? @relation(fields: [lecture_id], references: [id], onUpdate: NoAction)
+  student_profiles  student_profiles   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subjects          subjects           @relation(fields: [subject_id], references: [id], onUpdate: NoAction)
+  teacher_profiles  teacher_profiles   @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+
+  @@index([student_id], map: "idx_homework_student_id")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model interested_students {
+  id                             String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  student_name                   String
+  parent_name                    String
+  email                          String
+  phone                          String
+  source                         String              @default("contact_us")
+  status                         String              @default("new")
+  registration_token             String?             @unique
+  registration_link_generated_at DateTime?           @db.Timestamp(6)
+  registration_link_generated_by String?             @db.Uuid
+  registration_lead_id           String?             @db.Uuid
+  notes                          String?
+  created_at                     DateTime            @default(now()) @db.Timestamp(6)
+  updated_at                     DateTime            @default(now()) @db.Timestamp(6)
+  registration_leads             registration_leads? @relation(fields: [registration_lead_id], references: [id], onUpdate: NoAction)
+  users                          User?               @relation(fields: [registration_link_generated_by], references: [id], onUpdate: NoAction)
+
+  @@index([created_at(sort: Desc)], map: "idx_interested_students_created_at")
+  @@index([phone], map: "idx_interested_students_phone")
+  @@index([registration_token], map: "idx_interested_students_registration_token")
+  @@index([status], map: "idx_interested_students_status")
+}
+
+model lecture_attendance {
+  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lecture_id            String             @db.Uuid
+  user_id               String             @db.Uuid
+  role_type             String             @db.VarChar(50)
+  joined_at             DateTime?          @db.Timestamp(6)
+  left_at               DateTime?          @db.Timestamp(6)
+  duration_minutes      Int?               @default(0)
+  source                attendance_source? @default(manual)
+  status                attendance_status? @default(absent)
+  created_at            DateTime?          @default(now()) @db.Timestamp(6)
+  updated_at            DateTime?          @default(now()) @db.Timestamp(6)
+  participant_email     String?
+  participant_name      String?
+  google_participant_id String?            @db.VarChar(255)
+  google_session_id     String?            @db.VarChar(255)
+  meet_raw              Json?
+  lecture_schedules     lecture_schedules  @relation(fields: [lecture_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                 User               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([lecture_id, user_id], map: "lecture_user_attendance_unique")
+  @@index([lecture_id], map: "idx_attendance_lecture_id")
+  @@index([user_id], map: "idx_attendance_user_id")
+}
+
+model lecture_completion_reports {
+  id                  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lecture_id          String            @unique @db.Uuid
+  teacher_id          String            @db.Uuid
+  summary             String?
+  topic_covered       String?
+  homework_given      String?
+  student_performance String?
+  submitted_at        DateTime?         @default(now()) @db.Timestamp(6)
+  created_at          DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?         @default(now()) @db.Timestamp(6)
+  lecture_schedules   lecture_schedules @relation(fields: [lecture_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_profiles    teacher_profiles  @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model lecture_schedules {
+  id                         String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  enrollment_id              String                      @db.Uuid
+  student_id                 String                      @db.Uuid
+  teacher_id                 String                      @db.Uuid
+  subject_id                 String                      @db.Uuid
+  scheduled_by               String?                     @db.Uuid
+  title                      String                      @db.VarChar(200)
+  description                String?
+  scheduled_start            DateTime                    @db.Timestamp(6)
+  scheduled_end              DateTime                    @db.Timestamp(6)
+  google_calendar_event_id   String?                     @db.VarChar(255)
+  google_meet_link           String?
+  google_meet_space_id       String?                     @db.VarChar(255)
+  recording_drive_file_id    String?                     @db.VarChar(255)
+  recording_drive_url        String?
+  status                     lecture_status              @default(scheduled)
+  rescheduled_from_id        String?                     @db.Uuid
+  created_at                 DateTime?                   @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime?                   @default(now()) @db.Timestamp(6)
+  meet_link_source           String?                     @default("manual") @db.VarChar(50)
+  homework                   homework[]
+  lecture_attendance         lecture_attendance[]
+  lecture_completion_reports lecture_completion_reports?
+  enrollments                enrollments                 @relation(fields: [enrollment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  lecture_schedules          lecture_schedules?          @relation("lecture_schedulesTolecture_schedules", fields: [rescheduled_from_id], references: [id], onUpdate: NoAction)
+  other_lecture_schedules    lecture_schedules[]         @relation("lecture_schedulesTolecture_schedules")
+  users                      User?                       @relation(fields: [scheduled_by], references: [id], onUpdate: NoAction)
+  student_profiles           student_profiles            @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subjects                   subjects                    @relation(fields: [subject_id], references: [id], onUpdate: NoAction)
+  teacher_profiles           teacher_profiles            @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+  lecture_verifications      lecture_verifications?
+  parent_feedback            parent_feedback[]
+  teacher_notes              teacher_notes[]
+
+  @@index([scheduled_start], map: "idx_lecture_scheduled_start")
+  @@index([status], map: "idx_lecture_status")
+  @@index([student_id], map: "idx_lecture_student_id")
+  @@index([subject_id], map: "idx_lecture_subject_id")
+  @@index([teacher_id], map: "idx_lecture_teacher_id")
+}
+
+model lecture_verifications {
+  id                       String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lecture_id               String                @unique @db.Uuid
+  verified_by              String                @db.Uuid
+  auto_check_status        auto_check_status?    @default(needs_review)
+  teacher_joined           Boolean?              @default(false)
+  student_joined           Boolean?              @default(false)
+  minimum_duration_met     Boolean?              @default(false)
+  teacher_duration_minutes Int?                  @default(0)
+  student_duration_minutes Int?                  @default(0)
+  decision                 verification_decision @default(needs_review)
+  remarks                  String?
+  verified_at              DateTime?             @default(now()) @db.Timestamp(6)
+  lecture_schedules        lecture_schedules     @relation(fields: [lecture_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users                    User                  @relation(fields: [verified_by], references: [id], onUpdate: NoAction)
+}
+
+model notifications {
+  id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String             @db.Uuid
+  title      String             @db.VarChar(200)
+  message    String
+  type       notification_type? @default(system)
+  is_read    Boolean?           @default(false)
+  created_at DateTime?          @default(now()) @db.Timestamp(6)
+  users      User               @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([user_id], map: "idx_notifications_user_id")
+}
+
+model other_fee {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  title       String
+  fee_type    String
+  class_level String?
+  amount      Decimal  @default(0) @db.Decimal(12, 2)
+  status      String   @default("active")
+  created_at  DateTime @default(now()) @db.Timestamp(6)
+  name        String?
+  description String?
+  updated_at  DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([class_level], map: "idx_other_fee_class_level")
+  @@index([status], map: "idx_other_fee_status")
+  @@index([fee_type], map: "idx_other_fee_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model outbound_messages {
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  message_type        String
+  related_entity_type String
+  related_entity_id   String?   @db.Uuid
+  recipient_email     String?
+  subject             String
+  body                String
+  sent_at             DateTime? @db.Timestamp(6)
+  sent_status         String    @default("pending")
+  created_by          String?   @db.Uuid
+  created_at          DateTime  @default(now()) @db.Timestamp(6)
+  updated_at          DateTime  @default(now()) @db.Timestamp(6)
+  body_text           String?
+  payment_submit_url  String?
+  users               User?     @relation(fields: [created_by], references: [id], onUpdate: NoAction)
+
+  @@index([related_entity_type, related_entity_id], map: "idx_outbound_messages_related")
+  @@index([message_type], map: "idx_outbound_messages_type")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model parent_feedback {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  parent_id         String             @db.Uuid
+  student_id        String             @db.Uuid
+  lecture_id        String?            @db.Uuid
+  feedback          String
+  rating            Int?
+  created_at        DateTime?          @default(now()) @db.Timestamp(6)
+  lecture_schedules lecture_schedules? @relation(fields: [lecture_id], references: [id], onUpdate: NoAction)
+  parent_profiles   parent_profiles    @relation(fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student_profiles  student_profiles   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model parent_profiles {
+  id              String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String            @unique @db.Uuid
+  relation        String?           @db.VarChar(50)
+  created_at      DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at      DateTime?         @default(now()) @db.Timestamp(6)
+  parent_feedback parent_feedback[]
+  users           User              @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student_parents student_parents[]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model payment_methods {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name           String
+  method_key     String         @unique
+  account_title  String?
+  account_number String?
+  iban           String?
+  bank_name      String?
+  branch_code    String?
+  instructions   String?
+  status         String         @default("active")
+  created_at     DateTime       @default(now()) @db.Timestamp(6)
+  updated_at     DateTime       @default(now()) @db.Timestamp(6)
+  fee_vouchers   fee_vouchers[]
+
+  @@index([status], map: "idx_payment_methods_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model registration_leads {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  source                   String                     @default("google_sheet") @db.VarChar(50)
+  student_name             String                     @db.VarChar(150)
+  parent_name              String?                    @db.VarChar(150)
+  email                    String?                    @db.VarChar(150)
+  phone                    String?                    @db.VarChar(50)
+  age                      Int?
+  class_level              String?                    @db.VarChar(100)
+  address                  String?
+  notes                    String?
+  status                   registration_status        @default(new_lead)
+  created_at               DateTime?                  @default(now()) @db.Timestamp(6)
+  updated_at               DateTime?                  @default(now()) @db.Timestamp(6)
+  city                     String?                    @db.VarChar(150)
+  parent_relation          String?
+  credential_dispatch_logs credential_dispatch_logs[]
+  enrollments              enrollments[]
+  fee_vouchers             fee_vouchers[]
+  interested_students      interested_students[]
+
+  @@index([status], map: "idx_registration_status")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+model regular_fee {
+  id           String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  class_level  String         @unique
+  name         String         @default("Regular Fee")
+  amount       Decimal        @default(0) @db.Decimal(12, 2)
+  status       String         @default("active")
+  created_at   DateTime       @default(now()) @db.Timestamp(6)
+  updated_at   DateTime       @default(now()) @db.Timestamp(6)
+  fee_vouchers fee_vouchers[]
+  courses      courses        @relation(fields: [class_level], references: [class_level])
+
+  @@index([class_level], map: "idx_regular_fee_class_level")
+  @@index([status], map: "idx_regular_fee_status")
+}
+
+model student_parents {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  student_id       String           @db.Uuid
+  parent_id        String           @db.Uuid
+  is_primary       Boolean?         @default(false)
+  created_at       DateTime?        @default(now()) @db.Timestamp(6)
+  parent_profiles  parent_profiles  @relation(fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student_profiles student_profiles @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([student_id, parent_id], map: "student_parent_unique")
+  @@index([parent_id], map: "idx_student_parents_parent_id")
+  @@index([student_id], map: "idx_student_parents_student_id")
+}
+
+model student_profiles {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id             String                @unique @db.Uuid
+  admission_no        String?               @unique @db.VarChar(100)
+  age                 Int?
+  grade_level         String?               @db.VarChar(100)
+  status              user_status?          @default(active)
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  enrollments         enrollments[]
+  fee_vouchers        fee_vouchers[]
+  homework            homework[]
+  lecture_schedules   lecture_schedules[]
+  parent_feedback     parent_feedback[]
+  student_parents     student_parents[]
+  users               User                  @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_assignments teacher_assignments[]
+  teacher_notes       teacher_notes[]
+}
+
+model subjects {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String                @unique @db.VarChar(150)
+  description         String?
+  status              user_status?          @default(active)
+  created_at          DateTime?             @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?             @default(now()) @db.Timestamp(6)
+  course_subjects     course_subjects[]
+  homework            homework[]
+  lecture_schedules   lecture_schedules[]
+  teacher_assignments teacher_assignments[]
+}
+
+model teacher_assignments {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  teacher_id       String            @db.Uuid
+  student_id       String?           @db.Uuid
+  course_id        String?           @db.Uuid
+  subject_id       String            @db.Uuid
+  assigned_by      String?           @db.Uuid
+  status           user_status?      @default(active)
+  created_at       DateTime?         @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?         @default(now()) @db.Timestamp(6)
+  users            User?             @relation(fields: [assigned_by], references: [id], onUpdate: NoAction)
+  courses          courses?          @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  student_profiles student_profiles? @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  subjects         subjects          @relation(fields: [subject_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_profiles teacher_profiles  @relation(fields: [teacher_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model teacher_notes {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  lecture_id        String?            @db.Uuid
+  teacher_id        String             @db.Uuid
+  student_id        String             @db.Uuid
+  note              String
+  visibility        String?            @default("parent") @db.VarChar(50)
+  created_at        DateTime?          @default(now()) @db.Timestamp(6)
+  lecture_schedules lecture_schedules? @relation(fields: [lecture_id], references: [id], onUpdate: NoAction)
+  student_profiles  student_profiles   @relation(fields: [student_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  teacher_profiles  teacher_profiles   @relation(fields: [teacher_id], references: [id], onUpdate: NoAction)
+}
+
+model teacher_profiles {
+  id                         String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                    String                       @unique @db.Uuid
+  qualification              String?                      @db.VarChar(255)
+  experience                 String?                      @db.VarChar(255)
+  status                     user_status?                 @default(active)
+  created_at                 DateTime?                    @default(now()) @db.Timestamp(6)
+  updated_at                 DateTime?                    @default(now()) @db.Timestamp(6)
+  homework                   homework[]
+  lecture_completion_reports lecture_completion_reports[]
+  lecture_schedules          lecture_schedules[]
+  teacher_assignments        teacher_assignments[]
+  teacher_notes              teacher_notes[]
+  users                      User                         @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model voucher_line_items {
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  voucher_id    String       @db.Uuid
+  fee_type      String
+  title         String
+  amount        Decimal      @default(0) @db.Decimal(12, 2)
+  created_at    DateTime     @default(now()) @db.Timestamp(6)
+  source_fee_id String?      @db.Uuid
+  fee_vouchers  fee_vouchers @relation(fields: [voucher_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([voucher_id], map: "idx_voucher_line_items_voucher_id")
+}
+
+enum user_status {
+  pending
+  active
+  suspended
+  archived
+}
+
+enum attendance_source {
+  manual
+  google_meet
+}
+
+enum attendance_status {
+  present
+  absent
+  late
+  partial
+}
+
+enum auto_check_status {
+  passed
+  failed
+  needs_review
+}
+
+enum fee_submission_status {
+  pending
+  verified
+  rejected
+}
+
+enum homework_status {
+  pending
+  submitted
+  reviewed
+}
+
+enum lecture_status {
+  scheduled
+  upcoming
+  live
+  completed_by_teacher
+  verified_by_coordinator
+  missed
+  rescheduled
+  cancelled
+  disputed
+}
+
+enum notification_type {
+  registration
+  fee
+  class
+  homework
+  system
+}
+
+enum payment_method {
+  bank
+  jazzcash
+  easypaisa
+  cash
+  other
+  Bank_transfer @map("Bank transfer")
+  JazzCash
+  EasyPaisa
+  Cash_deposit  @map("Cash deposit")
+  Other
+}
+
+enum registration_status {
+  new_lead
+  voucher_created
+  fee_submitted
+  fee_verified
+  access_granted
+  rejected
+  pending_clarification
+}
+
+enum verification_decision {
+  approved
+  rejected
+  reschedule
+  needs_review
+}
+
+enum voucher_status {
+  unpaid
+  submitted
+  verified
+  rejected
+  expired
+}
