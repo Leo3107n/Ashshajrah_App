@@ -127,7 +127,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "86%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background, ...shadows.modal },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetMeta: { color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },

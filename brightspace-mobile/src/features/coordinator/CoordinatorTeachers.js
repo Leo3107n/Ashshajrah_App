@@ -369,7 +369,7 @@ const styles = StyleSheet.create({
   sheet: { position: "absolute", right: 0, bottom: 0, left: 0, maxHeight: "88%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },
-  sheetTop: { flexDirection: "row", alignItems: "center", marginBottom: space.md },
+  sheetTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.md },
   largeAvatar: { width: 52, height: 52, alignItems: "center", justifyContent: "center", borderRadius: 26, backgroundColor: colors.goldPale },
   largeAvatarText: { color: colors.secondary, fontFamily: fonts.display, fontSize: fontSize.lg },
   sheetIdentity: { flex: 1, marginLeft: space.sm },

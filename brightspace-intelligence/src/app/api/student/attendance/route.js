@@ -14,6 +14,7 @@ export async function GET() {
         SELECT
           COUNT(ls.id)::int AS total_conducted,
           COUNT(*) FILTER (WHERE COALESCE(la.status::text, 'absent') IN ('present','partial'))::int AS attended_classes,
+          COUNT(*) FILTER (WHERE COALESCE(la.status::text, 'absent') = 'leave')::int AS leave_classes,
           COUNT(*) FILTER (WHERE COALESCE(la.status::text, 'absent') = 'absent' OR la.id IS NULL)::int AS absent_classes,
           COALESCE(
             ROUND(

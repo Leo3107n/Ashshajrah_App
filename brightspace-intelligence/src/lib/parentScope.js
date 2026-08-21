@@ -46,7 +46,7 @@ export async function getScopedParentChildren(session, options = {}) {
   if (isParentScopeAdmin(session)) {
     return includeDetails
       ? prisma.$queryRaw`
-          SELECT
+          SELECT DISTINCT ON (sp.id)
             sp.id::text AS id,
             sp.user_id::text AS user_id,
             u.full_name,
@@ -81,22 +81,22 @@ export async function getScopedParentChildren(session, options = {}) {
           LEFT JOIN enrollments e ON e.student_id = sp.id AND LOWER(e.status) = 'active'
           LEFT JOIN courses c ON c.id = e.course_id
           LEFT JOIN registration_leads rl ON rl.id = e.registration_id
-          ORDER BY u.full_name ASC
+          ORDER BY sp.id, e.start_date DESC NULLS LAST, e.created_at DESC NULLS LAST
         `
       : prisma.$queryRaw`
-          SELECT
+          SELECT DISTINCT ON (sp.id)
             sp.id::text AS id,
             u.full_name,
             sp.grade_level
           FROM student_profiles sp
           INNER JOIN users u ON u.id = sp.user_id
-          ORDER BY u.full_name ASC
+          ORDER BY sp.id, u.full_name ASC
         `;
   }
 
   return includeDetails
     ? prisma.$queryRaw`
-        SELECT
+        SELECT DISTINCT ON (sp.id)
           sp.id::text AS id,
           sp.user_id::text AS user_id,
           u.full_name,
@@ -134,10 +134,10 @@ export async function getScopedParentChildren(session, options = {}) {
         LEFT JOIN courses c ON c.id = e.course_id
         LEFT JOIN registration_leads rl ON rl.id = e.registration_id
         WHERE pp.user_id = ${session.user.id}::uuid
-        ORDER BY spp.is_primary DESC, u.full_name ASC
+        ORDER BY sp.id, spp.is_primary DESC, e.start_date DESC NULLS LAST, e.created_at DESC NULLS LAST
       `
     : prisma.$queryRaw`
-        SELECT
+        SELECT DISTINCT ON (sp.id)
           sp.id::text AS id,
           u.full_name,
           sp.grade_level
@@ -146,6 +146,6 @@ export async function getScopedParentChildren(session, options = {}) {
         INNER JOIN student_profiles sp ON sp.id = spp.student_id
         INNER JOIN users u ON u.id = sp.user_id
         WHERE pp.user_id = ${session.user.id}::uuid
-        ORDER BY spp.is_primary DESC, u.full_name ASC
+        ORDER BY sp.id, spp.is_primary DESC, u.full_name ASC
       `;
 }

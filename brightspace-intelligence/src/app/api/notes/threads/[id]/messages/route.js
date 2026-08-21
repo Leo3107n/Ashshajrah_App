@@ -65,11 +65,19 @@ async function canAccessThread(session, threadId) {
     return prisma.$queryRaw`
       SELECT nt.id::text AS id
       FROM note_threads nt
+      INNER JOIN student_profiles sp ON sp.user_id = ${session.user.id}::uuid
+      LEFT JOIN enrollments e ON e.student_id = sp.id AND LOWER(COALESCE(e.status, 'active')) = 'active'
+      LEFT JOIN courses c ON c.id = e.course_id
       WHERE nt.id = ${threadId}::uuid
-        AND nt.recipient_student_id = (
-          SELECT id FROM student_profiles WHERE user_id = ${session.user.id}::uuid LIMIT 1
-        )
+        AND nt.recipient_student_id IS NULL
         AND LOWER(COALESCE(nt.visibility, 'student')) = 'student'
+        AND (
+          (nt.course_id IS NOT NULL AND nt.course_id = e.course_id)
+          OR (
+            COALESCE(nt.class_level, '') <> ''
+            AND LOWER(COALESCE(nt.class_level, '')) = LOWER(COALESCE(c.class_level, sp.grade_level, ''))
+          )
+        )
       LIMIT 1
     `;
   }

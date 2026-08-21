@@ -64,15 +64,8 @@ async function getLatestMonthlyFee(studentIds) {
     LEFT JOIN courses c ON c.id = b.class_id
     WHERE item.student_id = ANY(${studentIds}::uuid[])
     ORDER BY
-      CASE
-        WHEN item.due_date IS NOT NULL
-          AND item.due_date < CURRENT_DATE
-          AND COALESCE(fs.status::text, fv.status::text, 'unpaid') NOT IN ('verified', 'approved', 'paid')
-        THEN 0
-        ELSE 1
-      END,
-      item.due_date ASC NULLS LAST,
-      item.created_at DESC
+      item.created_at DESC,
+      item.due_date DESC NULLS LAST
     LIMIT 1
   `;
 
@@ -111,15 +104,8 @@ async function getMonthlyFeesForStudents(studentIds) {
     )
     ORDER BY
       item.student_id,
-      CASE
-        WHEN item.due_date IS NOT NULL
-          AND item.due_date < CURRENT_DATE
-          AND COALESCE(fs.status::text, fv.status::text, 'unpaid') NOT IN ('verified', 'approved', 'paid')
-        THEN 0
-        ELSE 1
-      END,
-      item.due_date ASC NULLS LAST,
-      item.created_at DESC
+      item.created_at DESC,
+      item.due_date DESC NULLS LAST
   `;
 
   return rows;
@@ -149,6 +135,7 @@ export async function GET() {
     const isPaid = ["verified"].includes(String(latest.effective_status || "").toLowerCase());
     const isSubmitted = ["submitted"].includes(String(latest.effective_status || "").toLowerCase());
     const overdue = typeof daysLeft === "number" && daysLeft < 0 && !isPaid;
+    const deadlinePending = typeof daysLeft === "number" && daysLeft >= 0 && !isPaid;
     const dueSoon = typeof daysLeft === "number" && daysLeft <= 3 && daysLeft >= 0 && !isPaid;
 
     return json("Monthly fee status fetched.", 200, {
@@ -164,6 +151,7 @@ export async function GET() {
       payment_status: latest.payment_status || "not_submitted",
       voucher_status: latest.voucher_status || "unpaid",
       days_left: daysLeft,
+      deadline_pending: deadlinePending,
       due_soon: dueSoon,
       overdue,
       is_paid: isPaid,
@@ -175,14 +163,15 @@ export async function GET() {
           ...item,
           days_left: itemDaysLeft,
           overdue: typeof itemDaysLeft === "number" && itemDaysLeft < 0 && !itemPaid,
+          deadline_pending: typeof itemDaysLeft === "number" && itemDaysLeft >= 0 && !itemPaid,
           due_soon: typeof itemDaysLeft === "number" && itemDaysLeft <= 3 && itemDaysLeft >= 0 && !itemPaid,
           is_paid: itemPaid,
         };
       }),
       message: overdue
         ? "Monthly fee is overdue. Please submit payment to continue LMS access."
-        : dueSoon
-          ? "Monthly fee is due soon. Please submit payment to continue LMS access."
+        : deadlinePending
+          ? "Monthly fee deadline is still pending. Please submit payment before the due date."
           : "Monthly fee voucher is not submitted yet. Please submit to continue LMS access.",
     });
   } catch (error) {

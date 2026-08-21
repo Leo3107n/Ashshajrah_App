@@ -10,6 +10,7 @@ import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 
 const FILTERS = [
@@ -41,9 +42,27 @@ function dateTime(value, options) {
   return Number.isNaN(parsed.getTime()) ? "Not scheduled" : parsed.toLocaleString([], options);
 }
 
+function classActionState(item) {
+  const now = Date.now();
+  const start = item?.scheduled_start ? new Date(item.scheduled_start).getTime() : 0;
+  const end = item?.scheduled_end ? new Date(item.scheduled_end).getTime() : 0;
+  const status = statusOf(item || {});
+  const future = Boolean(start && now < start);
+  const live = status === "live" || Boolean(start && now >= start && (!end || now <= end));
+  const ended = Boolean(
+    end ? now > end : ["completed", "completed_by_teacher", "verified_by_coordinator"].includes(status)
+  );
+
+  return {
+    future,
+    canJoin: live && Boolean(item?.google_meet_link),
+    canWatchRecording: ended && Boolean(item?.recording_drive_url),
+  };
+}
+
 export default function ParentLectures() {
   const [data, setData] = useState({ items: [], subjects: [], children: [] });
-  const [childId, setChildId] = useState("");
+  const [childId, setChildId] = useParentChildSelection(data.children);
   const [filter, setFilter] = useState("all");
   const [subjectId, setSubjectId] = useState("");
   const [selected, setSelected] = useState(null);
@@ -73,15 +92,6 @@ export default function ParentLectures() {
     setSelected(null);
   }, [childId, filter, subjectId]);
 
-  useEffect(() => {
-    if (data.children.length === 1) {
-      setChildId(data.children[0]?.id || "");
-      return;
-    }
-    if (childId && data.children.some((child) => child.id === childId)) return;
-    setChildId("");
-  }, [childId, data.children]);
-
   const requiresChildSelection = data.children.length > 1 && !childId;
 
   const visible = useMemo(
@@ -106,7 +116,7 @@ export default function ParentLectures() {
     <>
       <Screen
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
+        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
       >
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>YOUR CHILDREN</AppText>
@@ -178,7 +188,7 @@ function LectureRow({ item, onPress }) {
           <StatusChip tone={lectureTone(status)}>{readable(status)}</StatusChip>
         </View>
         {item.student_name ? <AppText style={styles.childName}>{item.student_name}</AppText> : null}
-        <AppText style={styles.meta}>{item.teacher_name} · {dateTime(item.scheduled_start, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</AppText>
+        <AppText style={styles.meta}>{dateTime(item.scheduled_start, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</AppText>
       </View>
       <Ionicons color={colors.outline} name="chevron-forward" size={19} />
     </Pressable>
@@ -187,6 +197,7 @@ function LectureRow({ item, onPress }) {
 
 function LectureDetailSheet({ item, onClose }) {
   const status = statusOf(item || {});
+  const action = classActionState(item);
   return (
     <View style={styles.overlay}>
       <Pressable onPress={onClose} style={styles.overlayBg} />
@@ -204,30 +215,44 @@ function LectureDetailSheet({ item, onClose }) {
         <ScrollView contentContainerStyle={styles.sheetContent}>
           <StatusChip tone={lectureTone(status)}>{readable(status)}</StatusChip>
           <Detail icon="person-outline" label="Child" value={item?.student_name} />
-          <Detail icon="school-outline" label="Teacher" value={item?.teacher_name} />
           <Detail icon="calendar-outline" label="Starts" value={dateTime(item?.scheduled_start, { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} />
           <Detail icon="time-outline" label="Ends" value={dateTime(item?.scheduled_end, { hour: "2-digit", minute: "2-digit" })} />
           {item?.description ? <Detail icon="document-text-outline" label="About" value={item.description} /> : null}
-          {item?.recording_drive_url ? (
+          {action.canWatchRecording ? (
             <View style={styles.meetRow}>
               <Ionicons color={colors.secondary} name="play-circle-outline" size={18} />
               <AppText style={styles.meetText}>A recording is available for this lecture.</AppText>
             </View>
           ) : null}
-          {item?.google_meet_link ? (
+          {action.canWatchRecording ? (
+            <PillButton
+              icon={<Ionicons color={colors.white} name="play-circle-outline" size={18} />}
+              onPress={() => Linking.openURL(item.recording_drive_url)}
+              style={styles.meetButton}
+            >
+              Watch Recording
+            </PillButton>
+          ) : null}
+          {action.canJoin ? (
             <>
               <View style={styles.meetRow}>
                 <Ionicons color={colors.secondary} name="videocam-outline" size={18} />
-                <AppText style={styles.meetText}>Google Meet link is available for this scheduled class.</AppText>
+                <AppText style={styles.meetText}>This class has started. You can join now.</AppText>
               </View>
               <PillButton
                 icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
                 onPress={() => Linking.openURL(item.google_meet_link)}
                 style={styles.meetButton}
               >
-                Open Google Meet
+                Join Class
               </PillButton>
             </>
+          ) : null}
+          {action.future ? (
+            <View style={styles.meetRow}>
+              <Ionicons color={colors.secondary} name="time-outline" size={18} />
+              <AppText style={styles.meetText}>This class has not started yet.</AppText>
+            </View>
           ) : null}
         </ScrollView>
       </View>
@@ -281,7 +306,7 @@ const styles = StyleSheet.create({
   overlayBg: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "72%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", alignItems: "flex-start", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetEyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1 },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },

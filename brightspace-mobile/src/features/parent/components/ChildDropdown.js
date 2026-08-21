@@ -40,8 +40,8 @@ export default function ChildDropdown({
           <View style={styles.sheet}>
             <View style={styles.handle} />
             <View style={styles.header}>
-              <AppText variant="heading">{label}</AppText>
-              <Pressable accessibilityLabel="Close child selector" onPress={() => setOpen(false)}>
+              <AppText style={styles.headerTitle} variant="heading">{label}</AppText>
+              <Pressable accessibilityLabel="Close child selector" onPress={() => setOpen(false)} style={styles.closeButton}>
                 <Ionicons color={colors.onSurfaceVariant} name="close" size={24} />
               </Pressable>
             </View>
@@ -91,7 +91,9 @@ const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "72%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  header: { flexDirection: "row", alignItems: "center", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  headerTitle: { flex: 1, paddingRight: space.md },
+  closeButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.surfaceLow },
   options: { padding: space.lg, gap: space.sm, paddingBottom: space["3xl"] },
   option: { flexDirection: "row", alignItems: "center", padding: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.xl, backgroundColor: colors.surface },
   optionActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },

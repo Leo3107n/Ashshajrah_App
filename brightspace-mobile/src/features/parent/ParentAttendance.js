@@ -1,6 +1,6 @@
 /**
  * Parent Attendance. Read-only attendance history across the parent's
- * enrolled children, filterable by child, subject, and status.
+ * enrolled children, filterable by child and attendance status.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -9,16 +9,17 @@ import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
-const STATUS_FILTERS = ["all", "present", "partial", "absent"];
+const STATUS_FILTERS = ["all", "present", "leave", "partial", "absent"];
 const normalized = (value) => String(value || "").trim().toLowerCase();
 const readable = (value) => String(value || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 
 function tone(value) {
   const status = normalized(value);
   if (status === "present") return "success";
-  if (status === "partial") return "warning";
+  if (["leave", "partial"].includes(status)) return "warning";
   if (status === "absent") return "danger";
   return "neutral";
 }
@@ -36,9 +37,8 @@ function dateTime(value) {
 
 export default function ParentAttendance() {
   const [data, setData] = useState({ summary: {}, items: [], children: [] });
-  const [childId, setChildId] = useState("");
+  const [childId, setChildId] = useParentChildSelection(data.children);
   const [status, setStatus] = useState("all");
-  const [subject, setSubject] = useState("");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -65,21 +65,8 @@ export default function ParentAttendance() {
     load();
   }, [load]);
 
-  useEffect(() => {
-    if (data.children.length === 1) {
-      setChildId(data.children[0]?.id || "");
-      return;
-    }
-    if (childId && data.children.some((child) => child.id === childId)) return;
-    setChildId("");
-  }, [childId, data.children]);
-
   const requiresChildSelection = data.children.length > 1 && !childId;
 
-  const subjects = useMemo(
-    () => [...new Set(data.items.map((item) => item.subject_name).filter(Boolean))].sort(),
-    [data.items]
-  );
   const visible = useMemo(
     () =>
       requiresChildSelection
@@ -87,10 +74,9 @@ export default function ParentAttendance() {
         :
       data.items.filter(
         (item) =>
-          (!subject || item.subject_name === subject) &&
           (status === "all" || normalized(item.attendance_status || item.status) === status)
       ),
-    [data.items, requiresChildSelection, status, subject]
+    [data.items, requiresChildSelection, status]
   );
 
   if (loading) return <DashboardSkeleton message="Reviewing attendance..." />;
@@ -99,18 +85,25 @@ export default function ParentAttendance() {
   return (
     <Screen
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
+      refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
     >
       <View style={styles.heading}>
         <AppText style={styles.eyebrow}>YOUR CHILDREN</AppText>
         <AppText variant="display">Attendance</AppText>
-        <AppText style={styles.subtitle}>Only coordinator-verified lectures are included.</AppText>
+        <AppText style={styles.subtitle}>Overall attendance across coordinator-verified lectures.</AppText>
+      </View>
+
+      <View style={styles.summary}>
+        <Summary label="Conducted" value={data.summary.total || 0} />
+        <Summary label="Attended" value={data.summary.attended_classes || 0} />
+        <Summary label="Leave" value={data.summary.leave_classes || 0} />
+        <Summary danger label="Absent" value={data.summary.absent_classes || 0} />
       </View>
 
       <SurfaceCard style={styles.overview}>
         <View style={styles.ring}>
           <AppText style={styles.ringValue}>{percentage}%</AppText>
-          <AppText style={styles.ringLabel}>ATTENDANCE</AppText>
+          <AppText style={styles.ringLabel}>OVERALL</AppText>
         </View>
         <View style={styles.overviewCopy}>
           <AppText style={styles.overviewTitle}>
@@ -118,7 +111,7 @@ export default function ParentAttendance() {
           </AppText>
           <View style={styles.bar}><View style={[styles.barFill, { width: `${Math.min(100, percentage)}%` }]} /></View>
           <AppText style={styles.overviewMeta}>
-            {data.summary.attended_classes || 0} attended · {data.summary.absent_classes || 0} absent
+            Overall attendance: {percentage}% · {data.summary.attended_classes || 0} attended · {data.summary.absent_classes || 0} absent
           </AppText>
         </View>
       </SurfaceCard>
@@ -138,13 +131,6 @@ export default function ParentAttendance() {
           <Filter active={status === item} key={item} label={readable(item)} onPress={() => setStatus(item)} />
         ))}
       </ScrollView>
-      {subjects.length ? (
-        <ScrollView contentContainerStyle={styles.subjectFilters} horizontal showsHorizontalScrollIndicator={false}>
-          <Filter active={!subject} label="All Subjects" onPress={() => setSubject("")} />
-          {subjects.map((item) => <Filter active={subject === item} key={item} label={item} onPress={() => setSubject(item)} />)}
-        </ScrollView>
-      ) : null}
-
       <View style={styles.sectionHeader}>
         <AppText style={styles.sectionTitle}>Attendance History</AppText>
         <AppText style={styles.count}>{requiresChildSelection ? 0 : visible.length} records</AppText>
@@ -164,7 +150,7 @@ export default function ParentAttendance() {
         <SurfaceCard style={styles.state}>
           <Ionicons color={colors.secondary} name="calendar-clear-outline" size={30} />
           <AppText style={styles.stateTitle}>No matching records</AppText>
-          <AppText style={styles.stateText}>Try another child, status, or subject filter.</AppText>
+          <AppText style={styles.stateText}>Try another child or attendance status.</AppText>
         </SurfaceCard>
       )}
     </Screen>
@@ -173,19 +159,27 @@ export default function ParentAttendance() {
 
 function AttendanceRow({ item }) {
   const status = item.attendance_status || item.status;
+  const statusLabel = readable(status || "absent");
   return (
     <View style={styles.row}>
       <View style={[styles.rowIcon, normalized(status) === "absent" && styles.rowIconAbsent]}>
-        <Ionicons color={normalized(status) === "absent" ? colors.error : colors.secondary} name={normalized(status) === "absent" ? "close-outline" : "checkmark-outline"} size={21} />
+        <Ionicons
+          color={normalized(status) === "absent" ? colors.error : colors.secondary}
+          name={normalized(status) === "absent" ? "close-outline" : normalized(status) === "leave" ? "calendar-outline" : "checkmark-outline"}
+          size={21}
+        />
       </View>
       <View style={styles.rowCopy}>
         <AppText style={styles.rowTitle}>{item.subject_name || item.title}</AppText>
         {item.student_name ? <AppText style={styles.childName}>{item.student_name}</AppText> : null}
-        <AppText style={styles.rowMeta}>{item.title} · {item.teacher_name}</AppText>
+        <AppText style={styles.rowMeta}>{item.title || "Scheduled class"}</AppText>
+        <AppText style={[styles.rowStatus, styles[`rowStatus_${normalized(status)}`]]}>
+          Class Status: {statusLabel}
+        </AppText>
         <AppText style={styles.rowDate}>{dateTime(item.scheduled_start)}</AppText>
       </View>
       <View style={styles.rowEnd}>
-        <StatusChip tone={tone(status)}>{readable(status)}</StatusChip>
+        <StatusChip tone={tone(status)}>{statusLabel}</StatusChip>
         {item.duration_minutes ? <AppText style={styles.duration}>{item.duration_minutes} min</AppText> : null}
       </View>
     </View>
@@ -196,11 +190,25 @@ function Filter({ active, label, onPress }) {
   return <Pressable onPress={onPress} style={[styles.filter, active && styles.filterActive]}><AppText numberOfLines={1} style={[styles.filterText, active && styles.filterTextActive]}>{label}</AppText></Pressable>;
 }
 
+function Summary({ danger = false, label, value }) {
+  return (
+    <View style={[styles.summaryItem, danger && styles.summaryDanger]}>
+      <AppText style={styles.summaryValue}>{value}</AppText>
+      <AppText style={styles.summaryLabel}>{label}</AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: { paddingTop: space.lg, paddingBottom: space.xl },
   heading: { marginBottom: space.lg },
   eyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.1 },
   subtitle: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  summary: { flexDirection: "row", flexWrap: "wrap", gap: space.sm, marginBottom: space.md },
+  summaryItem: { flexGrow: 1, minWidth: "22%", alignItems: "center", paddingVertical: space.sm, borderRadius: radius.lg, backgroundColor: colors.surfaceLow },
+  summaryDanger: { backgroundColor: colors.errorContainer },
+  summaryValue: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
+  summaryLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 8, textTransform: "uppercase" },
   overview: { flexDirection: "row", alignItems: "center" },
   ring: { width: 92, height: 92, alignItems: "center", justifyContent: "center", borderWidth: 8, borderColor: colors.secondaryContainer, borderRadius: 46, backgroundColor: colors.primaryContainer },
   ringValue: { color: colors.white, fontFamily: fonts.display, fontSize: fontSize.xl },
@@ -211,7 +219,6 @@ const styles = StyleSheet.create({
   barFill: { height: "100%", borderRadius: 4, backgroundColor: colors.secondary },
   overviewMeta: { marginTop: space.xs, color: colors.outline, fontSize: 9 },
   filters: { gap: space.sm, paddingTop: space.lg },
-  subjectFilters: { gap: space.sm, paddingTop: space.sm },
   filter: { minWidth: 92, height: 40, alignItems: "center", justifyContent: "center", paddingHorizontal: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
   filterActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
   filterText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
@@ -226,6 +233,11 @@ const styles = StyleSheet.create({
   rowTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
   childName: { color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: 10, marginTop: 1 },
   rowMeta: { color: colors.onSurfaceVariant, fontSize: 9 },
+  rowStatus: { marginTop: 3, fontFamily: fonts.bodyBold, fontSize: 9 },
+  rowStatus_present: { color: colors.secondary },
+  rowStatus_partial: { color: colors.goldDark },
+  rowStatus_leave: { color: colors.goldDark },
+  rowStatus_absent: { color: colors.error },
   rowDate: { marginTop: 3, color: colors.outline, fontSize: 9 },
   rowEnd: { alignItems: "flex-end" },
   duration: { marginTop: 3, color: colors.outline, fontSize: 8 },

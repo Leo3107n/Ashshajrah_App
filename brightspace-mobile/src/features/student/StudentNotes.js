@@ -1,7 +1,7 @@
 /**
- * Student Notes and Communications. This screen is intentionally read-only for
- * learners: students can only view teacher notes and student-targeted message
- * threads that already belong to them, without any compose or reply actions.
+ * Student Teacher Notes. This screen is intentionally read-only for learners:
+ * students only see class-wide teacher notes for their enrolled class, not
+ * one-to-one/private notes addressed to an individual student.
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
@@ -44,8 +44,7 @@ function dateTime(value) {
 }
 
 export default function StudentNotes() {
-  const [tab, setTab] = useState("notes");
-  const [data, setData] = useState({ notes: [], threads: [] });
+  const [data, setData] = useState({ notes: [] });
   const [selectedThread, setSelectedThread] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -55,13 +54,17 @@ export default function StudentNotes() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const [timeline, threads] = await Promise.all([
-        api.student.timeline({ range: "all" }),
-        api.shared.notes.threads(),
-      ]);
+      const threads = await api.shared.notes.threads();
       setData({
-        notes: timeline?.notes || [],
-        threads: threads?.items || [],
+        notes: (threads?.items || []).map((thread) => ({
+          id: thread.id,
+          note: thread.last_message || "No note content available.",
+          created_at: thread.last_message_at || thread.updated_at || thread.created_at,
+          teacher_name: thread.teacher_name,
+          course_title: thread.course_title,
+          class_level: thread.class_level,
+          subject_name: thread.subject_name,
+        })),
       });
     } catch (nextError) {
       setError(nextError?.message || "Unable to load communications.");
@@ -92,27 +95,10 @@ export default function StudentNotes() {
       >
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>STAY CONNECTED</AppText>
-          <AppText variant="display">Notes & Messages</AppText>
+          <AppText variant="display">Teacher Notes</AppText>
           <AppText style={styles.subtitle}>
-            Read teacher feedback and messages shared with you.
+            Read teacher notes shared with your entire class.
           </AppText>
-        </View>
-
-        <View style={styles.tabs}>
-          <Tab
-            active={tab === "notes"}
-            count={data.notes.length}
-            icon="document-text-outline"
-            label="Teacher Notes"
-            onPress={() => setTab("notes")}
-          />
-          <Tab
-            active={tab === "messages"}
-            count={data.threads.length}
-            icon="chatbubbles-outline"
-            label="Messages"
-            onPress={() => setTab("messages")}
-          />
         </View>
 
         {error ? (
@@ -123,22 +109,8 @@ export default function StudentNotes() {
               Try Again
             </PillButton>
           </SurfaceCard>
-        ) : tab === "notes" ? (
-          <NotesList items={data.notes} />
-        ) : data.threads.length ? (
-          data.threads.map((thread) => (
-            <ThreadCard
-              item={thread}
-              key={thread.id}
-              onPress={() => setSelectedThread(thread)}
-            />
-          ))
         ) : (
-          <Empty
-            icon="chatbubble-ellipses-outline"
-            text="Messages from teachers shared with you will appear here."
-            title="No messages yet"
-          />
+          <NotesList items={data.notes} />
         )}
       </Screen>
 
@@ -183,6 +155,9 @@ function NotesList({ items }) {
           </View>
         </View>
         <AppText style={styles.noteText}>{item.note}</AppText>
+        <AppText style={styles.noteClass}>
+          {[item.subject_name, item.course_title || item.class_level].filter(Boolean).join(" · ") || "Class note"}
+        </AppText>
       </SurfaceCard>
     ));
 }
@@ -345,6 +320,7 @@ const styles = StyleSheet.create({
   readOnly: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: space.sm, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.goldPale },
   readOnlyText: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 8 },
   noteText: { marginTop: space.md, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 19 },
+  noteClass: { marginTop: space.sm, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9 },
   thread: { flexDirection: "row", alignItems: "center", marginBottom: space.sm, padding: space.md, borderRadius: radius.xl, backgroundColor: colors.surface, ...shadows.subtle },
   pressed: { opacity: 0.72 },
   threadIcon: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: colors.goldPale },
@@ -362,7 +338,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   threadSheet: { height: "88%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background, ...shadows.modal },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetMeta: { color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   messages: { flexGrow: 1, padding: space.lg, gap: space.sm },

@@ -156,9 +156,19 @@ export async function GET(request) {
         const [access] = await prisma.$queryRaw`
           SELECT nt.id::text AS id
           FROM note_threads nt
+          INNER JOIN student_profiles sp ON sp.id = ${ctx.studentId}::uuid
+          LEFT JOIN enrollments e ON e.student_id = sp.id AND LOWER(COALESCE(e.status, 'active')) = 'active'
+          LEFT JOIN courses c ON c.id = e.course_id
           WHERE nt.id = ${threadId}::uuid
-            AND nt.recipient_student_id = ${ctx.studentId}::uuid
+            AND nt.recipient_student_id IS NULL
             AND LOWER(COALESCE(nt.visibility, 'student')) = 'student'
+            AND (
+              (nt.course_id IS NOT NULL AND nt.course_id = e.course_id)
+              OR (
+                COALESCE(nt.class_level, '') <> ''
+                AND LOWER(COALESCE(nt.class_level, '')) = LOWER(COALESCE(c.class_level, sp.grade_level, ''))
+              )
+            )
           LIMIT 1
         `;
         if (!access?.id) return json("Thread not found.", 404, { items: [], thread: null });
@@ -278,6 +288,16 @@ export async function GET(request) {
 
     if (ctx.role === "student") {
       items = await prisma.$queryRaw`
+        WITH student_classes AS (
+          SELECT DISTINCT
+            sp.id,
+            e.course_id,
+            COALESCE(c.class_level, sp.grade_level, c.title, '') AS class_level
+          FROM student_profiles sp
+          LEFT JOIN enrollments e ON e.student_id = sp.id AND LOWER(COALESCE(e.status, 'active')) = 'active'
+          LEFT JOIN courses c ON c.id = e.course_id
+          WHERE sp.id = ${ctx.studentId}::uuid
+        )
         SELECT
           nt.id::text AS id,
           nt.teacher_id::text AS teacher_id,
@@ -299,6 +319,13 @@ export async function GET(request) {
             WHERE m.thread_id = nt.id
           ) AS message_count
         FROM note_threads nt
+        INNER JOIN student_classes sc ON (
+          (nt.course_id IS NOT NULL AND nt.course_id = sc.course_id)
+          OR (
+            COALESCE(nt.class_level, '') <> ''
+            AND LOWER(COALESCE(nt.class_level, '')) = LOWER(COALESCE(sc.class_level, ''))
+          )
+        )
         LEFT JOIN courses c ON c.id = nt.course_id
         LEFT JOIN subjects sub ON sub.id = nt.subject_id
         LEFT JOIN teacher_profiles tp ON tp.id = nt.teacher_id
@@ -310,7 +337,7 @@ export async function GET(request) {
           ORDER BY m.created_at DESC
           LIMIT 1
         ) latest ON TRUE
-        WHERE nt.recipient_student_id = ${ctx.studentId}::uuid
+        WHERE nt.recipient_student_id IS NULL
           AND LOWER(COALESCE(nt.visibility, 'student')) = 'student'
         ORDER BY nt.created_at DESC
       `;
@@ -319,7 +346,23 @@ export async function GET(request) {
 
     if (ctx.role === "parent") {
       items = await prisma.$queryRaw`
-        SELECT
+        WITH parent_children AS (
+          SELECT DISTINCT ON (sp.id, e.course_id, c.class_level)
+            sp.id,
+            su.full_name,
+            e.course_id,
+            c.class_level
+          FROM parent_profiles pp
+          INNER JOIN student_parents spp ON spp.parent_id = pp.id
+          INNER JOIN student_profiles sp ON sp.id = spp.student_id
+          INNER JOIN users su ON su.id = sp.user_id
+          LEFT JOIN enrollments e ON e.student_id = sp.id AND LOWER(COALESCE(e.status, 'active')) = 'active'
+          LEFT JOIN courses c ON c.id = e.course_id
+          WHERE pp.user_id = ${session.user.id}::uuid
+            AND (${childId || null}::uuid IS NULL OR sp.id = ${childId || null}::uuid)
+          ORDER BY sp.id, e.course_id, c.class_level
+        )
+        SELECT DISTINCT ON (nt.id, pc.id)
           nt.id::text AS id,
           nt.teacher_id::text AS teacher_id,
           nt.course_id::text AS course_id,
@@ -334,6 +377,8 @@ export async function GET(request) {
           latest.message AS last_message,
           latest.sender_role AS last_sender_role,
           latest.created_at AS last_message_at,
+          pc.id::text AS student_id,
+          pc.full_name AS student_name,
           (
             SELECT COUNT(*)::int
             FROM note_thread_messages m
@@ -351,18 +396,20 @@ export async function GET(request) {
           ORDER BY m.created_at DESC
           LIMIT 1
         ) latest ON TRUE
-        INNER JOIN student_profiles rsp ON rsp.id = nt.recipient_student_id
-        LEFT JOIN users rsu ON rsu.id = rsp.user_id
-        WHERE EXISTS (
-          SELECT 1
-          FROM student_parents spp
-          WHERE spp.parent_id = (
-            SELECT id FROM parent_profiles WHERE user_id = ${session.user.id}::uuid LIMIT 1
+        INNER JOIN parent_children pc ON (
+          nt.recipient_student_id = pc.id
+          OR (
+            nt.recipient_student_id IS NULL
+            AND nt.course_id IS NOT NULL
+            AND nt.course_id = pc.course_id
           )
-            AND spp.student_id = nt.recipient_student_id
-            AND (${childId || null}::uuid IS NULL OR nt.recipient_student_id = ${childId || null}::uuid)
+          OR (
+            nt.recipient_student_id IS NULL
+            AND COALESCE(nt.class_level, '') <> ''
+            AND LOWER(COALESCE(nt.class_level, '')) = LOWER(COALESCE(pc.class_level, ''))
+          )
         )
-          AND LOWER(COALESCE(nt.visibility, 'parent')) = 'parent'
+        WHERE LOWER(COALESCE(nt.visibility, 'parent')) IN ('parent', 'student')
         ORDER BY nt.created_at DESC
       `;
       return json("Threads fetched.", 200, { items });

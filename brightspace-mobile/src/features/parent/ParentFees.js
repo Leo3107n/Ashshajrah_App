@@ -26,6 +26,7 @@ import {
 } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 const FILTERS = ["all", "due", "submitted", "paid"];
@@ -69,7 +70,7 @@ function voucherType(item) {
 export default function ParentFees() {
   const [items, setItems] = useState([]);
   const [children, setChildren] = useState([]);
-  const [childId, setChildId] = useState("");
+  const [childId, setChildId] = useParentChildSelection(children);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -96,15 +97,6 @@ export default function ParentFees() {
   useEffect(() => {
     setSelected(null);
   }, [childId, filter]);
-
-  useEffect(() => {
-    if (children.length === 1) {
-      setChildId(children[0]?.id || "");
-      return;
-    }
-    if (childId && children.some((child) => child.id === childId)) return;
-    setChildId("");
-  }, [childId, children]);
 
   const requiresChildSelection = children.length > 1 && !childId;
 
@@ -160,7 +152,10 @@ export default function ParentFees() {
         refreshControl={
           <RefreshControl
             colors={[colors.gold]}
-            onRefresh={() => load({ refresh: true })}
+            onRefresh={() => {
+              setChildId("");
+              if (!childId) load({ refresh: true });
+            }}
             refreshing={refreshing}
             tintColor={colors.gold}
           />
@@ -421,7 +416,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "90%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", alignItems: "center", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetType: { marginTop: 3, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   sheetChild: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },

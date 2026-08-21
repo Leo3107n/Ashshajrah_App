@@ -29,6 +29,7 @@ export async function GET(request) {
           CASE
             WHEN LOWER(COALESCE(la.status::text, '')) IN ('present', 'late') THEN 'present'
             WHEN LOWER(COALESCE(la.status::text, '')) IN ('partial', 'partial_present') THEN 'partial'
+            WHEN LOWER(COALESCE(la.status::text, '')) = 'leave' THEN 'leave'
             WHEN LOWER(COALESCE(la.status::text, '')) IN ('absent', 'missed') THEN 'absent'
             ELSE LOWER(COALESCE(la.status::text, 'unknown'))
           END AS attendance_status,
@@ -61,6 +62,7 @@ export async function GET(request) {
 
     const total = rows.length;
     const present = rows.filter((row) => row.attendance_status === "present").length;
+    const leave = rows.filter((row) => row.attendance_status === "leave").length;
     const absent = rows.filter((row) => row.attendance_status === "absent").length;
     const attendancePercentage = total ? Math.round((present / total) * 100) : 0;
 
@@ -70,9 +72,11 @@ export async function GET(request) {
       summary: {
         total,
         present,
+        leave,
         percentage: attendancePercentage,
         attendance_percentage: attendancePercentage,
         attended_classes: present,
+        leave_classes: leave,
         absent_classes: absent,
       },
     });

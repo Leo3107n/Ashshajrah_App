@@ -4,7 +4,7 @@
  * the parent inbox child-scoped while still allowing back-and-forth replies.
  */
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
@@ -20,6 +20,7 @@ import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 function dateTime(value) {
@@ -31,9 +32,8 @@ function dateTime(value) {
 }
 
 export default function ParentNotes() {
-  const [tab, setTab] = useState("notes");
   const [data, setData] = useState({ notes: [], threads: [], children: [] });
-  const [childId, setChildId] = useState("");
+  const [childId, setChildId] = useParentChildSelection(data.children);
   const [selectedThread, setSelectedThread] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -68,16 +68,15 @@ export default function ParentNotes() {
     setSelectedThread(null);
   }, [childId]);
 
-  useEffect(() => {
-    if (data.children.length === 1) {
-      setChildId(data.children[0]?.id || "");
-      return;
-    }
-    if (childId && data.children.some((child) => child.id === childId)) return;
-    setChildId("");
-  }, [childId, data.children]);
-
   const requiresChildSelection = data.children.length > 1 && !childId;
+  const parentNotes = useMemo(
+    () => data.notes.filter((item) => String(item?.visibility || "parent").toLowerCase() === "parent"),
+    [data.notes]
+  );
+  const childNotes = useMemo(
+    () => data.notes.filter((item) => String(item?.visibility || "parent").toLowerCase() === "student"),
+    [data.notes]
+  );
 
   if (loading) return <DashboardSkeleton message="Opening communications..." />;
 
@@ -85,12 +84,12 @@ export default function ParentNotes() {
     <>
       <Screen
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
+        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
       >
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>STAY CONNECTED</AppText>
-          <AppText variant="display">Notes & Messages</AppText>
-          <AppText style={styles.subtitle}>Read teacher feedback and reply to messages about your child.</AppText>
+          <AppText variant="display">Teacher Notes</AppText>
+          <AppText style={styles.subtitle}>Read teacher feedback shared about your child.</AppText>
         </View>
 
         {data.children.length > 1 ? (
@@ -103,11 +102,6 @@ export default function ParentNotes() {
           />
         ) : null}
 
-        <View style={styles.tabs}>
-          <Tab active={tab === "notes"} count={data.notes.length} icon="document-text-outline" label="Teacher Notes" onPress={() => setTab("notes")} />
-          <Tab active={tab === "messages"} count={data.threads.length} icon="chatbubbles-outline" label="Messages" onPress={() => setTab("messages")} />
-        </View>
-
         {error ? (
           <SurfaceCard style={styles.state}>
             <Ionicons color={colors.error} name="cloud-offline-outline" size={28} />
@@ -116,12 +110,28 @@ export default function ParentNotes() {
           </SurfaceCard>
         ) : requiresChildSelection ? (
           <ChildSelectionState message="Choose a child from the dropdown to view that child's notes and messages." />
-        ) : tab === "notes" ? (
-          <NotesList items={data.notes} />
-        ) : data.threads.length ? (
-          data.threads.map((thread) => <ThreadCard item={thread} key={thread.id} onPress={() => setSelectedThread(thread)} />)
         ) : (
-          <Empty icon="chatbubble-ellipses-outline" text="Messages that teachers share about your child will appear here." title="No messages yet" />
+          <>
+            <NotesSection
+              emptyText="Teacher notes written for parents will appear here."
+              emptyTitle="No parent notes"
+              items={parentNotes}
+              title="Teacher Notes for Parents"
+            />
+            <NotesSection
+              emptyText="Teacher notes written for your child will appear here."
+              emptyTitle="No child notes"
+              items={childNotes}
+              title="Notes for Children"
+            />
+            <ThreadsSection
+              emptyText="Teacher message threads for this child or class will appear here."
+              emptyTitle="No child messages"
+              items={data.threads}
+              onOpen={setSelectedThread}
+              title="Child Messages"
+            />
+          </>
         )}
       </Screen>
 
@@ -130,12 +140,40 @@ export default function ParentNotes() {
   );
 }
 
-function NotesList({ items }) {
+function NotesSection({ emptyText, emptyTitle, items, title }) {
+  return (
+    <View style={styles.notesSection}>
+      <AppText style={styles.notesSectionTitle}>{title}</AppText>
+      <NotesList emptyText={emptyText} emptyTitle={emptyTitle} items={items} />
+    </View>
+  );
+}
+
+function ThreadsSection({ emptyText, emptyTitle, items, onOpen, title }) {
+  return (
+    <View style={styles.notesSection}>
+      <AppText style={styles.notesSectionTitle}>{title}</AppText>
+      {items.length ? (
+        items.map((item, index) => (
+          <ThreadCard
+            item={item}
+            key={`${item.id || "thread"}-${item.student_id || item.class_level || "class"}-${index}`}
+            onPress={() => onOpen(item)}
+          />
+        ))
+      ) : (
+        <Empty icon="chatbubbles-outline" text={emptyText} title={emptyTitle} />
+      )}
+    </View>
+  );
+}
+
+function NotesList({ emptyText, emptyTitle, items }) {
   if (!items.length) {
-    return <Empty icon="document-text-outline" text="Teacher feedback shared about your child will appear here." title="No teacher notes" />;
+    return <Empty icon="document-text-outline" text={emptyText} title={emptyTitle} />;
   }
-  return items.slice().reverse().map((item) => (
-    <SurfaceCard key={item.id} style={styles.note}>
+  return items.slice().reverse().map((item, index) => (
+    <SurfaceCard key={`${item.id || "note"}-${item.student_name || item.created_at || index}-${index}`} style={styles.note}>
       <View style={styles.noteTop}>
         <View style={styles.avatar}><AppText style={styles.avatarText}>{String(item.teacher_name || "T")[0].toUpperCase()}</AppText></View>
         <View style={styles.noteHeading}>
@@ -233,10 +271,10 @@ function ThreadSheet({ onClose, onSent, thread }) {
             {loading ? (
               <AppText style={styles.loadingText}>Loading messages...</AppText>
             ) : messages.length ? (
-              messages.map((message) => {
+              messages.map((message, index) => {
                 const mine = message.sender_role === "parent";
                 return (
-                  <View key={message.id} style={[styles.bubble, mine ? styles.myBubble : styles.teacherBubble]}>
+                  <View key={`${message.id || "message"}-${message.created_at || index}-${index}`} style={[styles.bubble, mine ? styles.myBubble : styles.teacherBubble]}>
                     <AppText style={[styles.sender, mine && styles.myText]}>{mine ? "You" : message.full_name || "Teacher"}</AppText>
                     <AppText style={[styles.messageText, mine && styles.myText]}>{message.message}</AppText>
                     <AppText style={[styles.messageDate, mine && styles.myDate]}>{dateTime(message.created_at)}</AppText>
@@ -311,6 +349,8 @@ const styles = StyleSheet.create({
   stateText: { marginTop: 3, color: colors.outline, fontSize: fontSize.xs, textAlign: "center" },
   errorText: { marginTop: space.sm, color: colors.error, textAlign: "center" },
   retry: { marginTop: space.md },
+  notesSection: { marginTop: space.lg },
+  notesSectionTitle: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   note: { marginTop: space.md },
   noteTop: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: colors.goldPale },
@@ -334,7 +374,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   threadSheet: { maxHeight: "88%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", alignItems: "flex-start", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetMeta: { marginTop: 2, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   messages: { padding: space.lg, gap: space.sm },

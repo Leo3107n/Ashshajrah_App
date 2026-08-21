@@ -63,12 +63,14 @@ export function AuthProvider({ children }) {
   const [status, setStatus] = useState("loading");
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState("");
+  const [parentSelectedChildId, setParentSelectedChildIdState] = useState("");
   const mountedRef = useRef(true);
   const refreshPromiseRef = useRef(null);
 
   const clearSession = useCallback(() => {
     if (!mountedRef.current) return;
     setSession(null);
+    setParentSelectedChildIdState("");
     setStatus("unauthenticated");
   }, []);
 
@@ -314,6 +316,11 @@ export function AuthProvider({ children }) {
   const user = userFromSession(session);
   const role = normalizeRole(user?.role);
 
+  const setParentSelectedChildId = useCallback((childId) => {
+    const nextChildId = String(childId || "");
+    setParentSelectedChildIdState(nextChildId);
+  }, []);
+
   useEffect(() => {
     mountedRef.current = true;
     // api.js emits one centralized unauthorized event for any protected API
@@ -358,6 +365,15 @@ export function AuthProvider({ children }) {
     return () => subscription.remove();
   }, [refreshSession, status]);
 
+  useEffect(() => {
+    // Child selection is intentionally session-only. A parent should choose the
+    // child after opening the portal, and refresh/reload must return to the
+    // unselected state instead of restoring a previous child automatically.
+    if (role !== "parent" || !user?.id) {
+      setParentSelectedChildIdState("");
+    }
+  }, [role, user?.id]);
+
   const value = useMemo(
     () => ({
       session,
@@ -377,6 +393,8 @@ export function AuthProvider({ children }) {
       clearError,
       clearNotice,
       updateSessionUser,
+      parentSelectedChildId,
+      setParentSelectedChildId,
     }),
     [
       session,
@@ -392,6 +410,8 @@ export function AuthProvider({ children }) {
       clearError,
       clearNotice,
       updateSessionUser,
+      parentSelectedChildId,
+      setParentSelectedChildId,
     ]
   );
 

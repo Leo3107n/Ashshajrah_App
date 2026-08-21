@@ -869,7 +869,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: radius.xl,
     backgroundColor: colors.background,
   },
-  sheetHead: { flexDirection: "row", alignItems: "center", marginBottom: space.md },
+  sheetHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.md },
   sheetTitle: { flex: 1, color: colors.primary, fontFamily: fonts.displayBold, fontSize: fontSize.xl },
   close: {
     width: 38,

@@ -4,9 +4,11 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import * as DocumentPicker from "expo-document-picker";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Image,
   Linking,
   Modal,
   Platform,
@@ -79,6 +81,26 @@ function statusTone(item) {
   if (status === "pending") return "warning";
   if (status === "rejected") return "danger";
   return "neutral";
+}
+
+function fileSize(asset) {
+  return Number(asset?.size || asset?.fileSize || 0);
+}
+
+function normalizeImageAsset(asset, fallbackName) {
+  const extension = asset?.uri?.split(".").pop()?.split("?")[0] || "jpg";
+  return {
+    ...asset,
+    mimeType: asset?.mimeType || "image/jpeg",
+    name: asset?.fileName || `${fallbackName}.${extension}`,
+    size: fileSize(asset),
+  };
+}
+
+function isImageAttachment(item) {
+  const name = normalized(item?.submission_attachment_name);
+  const url = normalized(item?.submission_attachment_url);
+  return /\.(png|jpe?g|webp|gif|heic|heif)(\?|$)/i.test(name) || /\.(png|jpe?g|webp|gif|heic|heif)(\?|$)/i.test(url);
 }
 
 export default function StudentHomework() {
@@ -216,6 +238,7 @@ export default function StudentHomework() {
 
 function HomeworkCard({ item, onPress }) {
   const overdue = isOverdue(item);
+  const canUpload = normalized(item.status) === "pending";
   return (
     <Pressable
       onPress={onPress}
@@ -246,6 +269,26 @@ function HomeworkCard({ item, onPress }) {
             Due {dateLabel(item.due_date)}
           </AppText>
         </View>
+        {item.submission_attachment_url ? (
+          <Pressable
+            onPress={() => Linking.openURL(item.submission_attachment_url)}
+            style={styles.uploadedFile}
+          >
+            <Ionicons color={colors.secondary} name="attach-outline" size={14} />
+            <AppText numberOfLines={1} style={styles.uploadedFileText}>
+              {item.submission_attachment_name || "Uploaded homework file"}
+            </AppText>
+            <Ionicons color={colors.secondary} name="open-outline" size={13} />
+          </Pressable>
+        ) : null}
+        {canUpload ? (
+          <View style={styles.uploadPrompt}>
+            <Ionicons color={colors.secondary} name="image-outline" size={15} />
+            <AppText style={styles.uploadPromptText}>
+              Upload screenshot/image
+            </AppText>
+          </View>
+        ) : null}
       </View>
       <Ionicons color={colors.outline} name="chevron-forward" size={19} />
     </Pressable>
@@ -275,11 +318,59 @@ function HomeworkSheet({ item, onClose, onSubmitted }) {
     if (result.canceled) return;
     const asset = result.assets?.[0];
     if (!asset) return;
-    if (Number(asset.size || 0) > MAX_FILE_BYTES) {
+    if (fileSize(asset) > MAX_FILE_BYTES) {
       setError("The selected file must be 10 MB or smaller.");
       return;
     }
     setFile(asset);
+    setError("");
+  }
+
+  async function chooseScreenshot() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setError("Allow photo access to upload a homework screenshot or image.");
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset) return;
+    if (fileSize(asset) > MAX_FILE_BYTES) {
+      setError("The selected screenshot or image must be 10 MB or smaller.");
+      return;
+    }
+
+    setFile(normalizeImageAsset(asset, "homework-image"));
+    setError("");
+  }
+
+  async function takeHomeworkPhoto() {
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      setError("Allow camera access to take and upload homework images.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9,
+    });
+    if (result.canceled) return;
+    const asset = result.assets?.[0];
+    if (!asset) return;
+    if (fileSize(asset) > MAX_FILE_BYTES) {
+      setError("The homework image must be 10 MB or smaller.");
+      return;
+    }
+
+    setFile(normalizeImageAsset(asset, "homework-photo"));
     setError("");
   }
 
@@ -350,6 +441,27 @@ function HomeworkSheet({ item, onClose, onSubmitted }) {
             {item?.lecture_title ? (
               <Detail label="Related lecture" value={item.lecture_title} />
             ) : null}
+            {item?.submission_attachment_url ? (
+              <View style={styles.attachmentBlock}>
+                {isImageAttachment(item) ? (
+                  <Pressable onPress={() => Linking.openURL(item.submission_attachment_url)}>
+                    <Image
+                      resizeMode="cover"
+                      source={{ uri: item.submission_attachment_url }}
+                      style={styles.attachmentPreview}
+                    />
+                  </Pressable>
+                ) : null}
+                <PillButton
+                  icon={<Ionicons color={colors.secondary} name="download-outline" size={18} />}
+                  onPress={() => Linking.openURL(item.submission_attachment_url)}
+                  style={styles.attachment}
+                  variant="outline"
+                >
+                  View / Download Uploaded File
+                </PillButton>
+              </View>
+            ) : null}
 
             {pending ? (
               <>
@@ -395,6 +507,26 @@ function HomeworkSheet({ item, onClose, onSubmitted }) {
                     <Ionicons color={colors.outline} name="add-circle-outline" size={21} />
                   )}
                 </Pressable>
+                <Pressable onPress={chooseScreenshot} style={styles.screenshotPicker}>
+                  <Ionicons color={colors.secondary} name="image-outline" size={22} />
+                  <View style={styles.fileCopy}>
+                    <AppText style={styles.fileTitle}>Upload screenshot or image</AppText>
+                    <AppText style={styles.fileHint}>
+                      Select an image from your gallery · maximum 10 MB
+                    </AppText>
+                  </View>
+                  <Ionicons color={colors.outline} name="images-outline" size={21} />
+                </Pressable>
+                <Pressable onPress={takeHomeworkPhoto} style={styles.screenshotPicker}>
+                  <Ionicons color={colors.secondary} name="camera-outline" size={22} />
+                  <View style={styles.fileCopy}>
+                    <AppText style={styles.fileTitle}>Take homework photo</AppText>
+                    <AppText style={styles.fileHint}>
+                      Capture a page or solved work · maximum 10 MB
+                    </AppText>
+                  </View>
+                  <Ionicons color={colors.outline} name="camera-reverse-outline" size={21} />
+                </Pressable>
                 {error ? (
                   <View style={styles.formError}>
                     <Ionicons color={colors.error} name="alert-circle-outline" size={18} />
@@ -421,15 +553,6 @@ function HomeworkSheet({ item, onClose, onSubmitted }) {
                   <AppText style={styles.submittedAt}>
                     Submitted {new Date(item.submitted_at).toLocaleString()}
                   </AppText>
-                ) : null}
-                {item?.submission_attachment_url ? (
-                  <PillButton
-                    onPress={() => Linking.openURL(item.submission_attachment_url)}
-                    style={styles.attachment}
-                    variant="outline"
-                  >
-                    Open Attachment
-                  </PillButton>
                 ) : null}
                 {item?.review_action === "homework_approved" ? (
                   <View style={styles.approved}>
@@ -526,6 +649,10 @@ const styles = StyleSheet.create({
   due: { flexDirection: "row", alignItems: "center", marginTop: space.xs },
   dueText: { marginLeft: 4, color: colors.outline, fontSize: 9 },
   dueOverdue: { color: colors.error, fontFamily: fonts.bodySemibold },
+  uploadedFile: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, marginTop: space.xs, maxWidth: "100%" },
+  uploadedFileText: { flex: 1, color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: 10 },
+  uploadPrompt: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, marginTop: space.sm, paddingHorizontal: space.sm, paddingVertical: 5, borderRadius: radius.full, backgroundColor: colors.goldPale },
+  uploadPromptText: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10 },
   state: { alignItems: "center", paddingVertical: space.xl },
   stateTitle: { marginTop: space.sm, color: colors.primary, fontFamily: fonts.bodyBold },
   stateText: { marginTop: 3, color: colors.outline, fontSize: fontSize.xs },
@@ -534,7 +661,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "90%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background, ...shadows.modal },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", alignItems: "flex-start", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },
   assignmentMeta: { gap: space.sm, padding: space.md, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
@@ -552,6 +679,7 @@ const styles = StyleSheet.create({
   inputLabel: { marginTop: space.lg, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   textarea: { minHeight: 120, marginTop: space.sm, padding: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.lg, color: colors.onSurface, fontFamily: fonts.body, fontSize: fontSize.sm, backgroundColor: colors.surface },
   filePicker: { flexDirection: "row", alignItems: "center", marginTop: space.md, padding: space.md, borderWidth: 1, borderStyle: "dashed", borderColor: colors.secondary, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  screenshotPicker: { flexDirection: "row", alignItems: "center", marginTop: space.sm, padding: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.lg, backgroundColor: colors.surfaceLow },
   fileCopy: { flex: 1, marginHorizontal: space.sm },
   fileTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   fileHint: { color: colors.outline, fontSize: 9 },
@@ -562,6 +690,8 @@ const styles = StyleSheet.create({
   submittedTitle: { flexDirection: "row", alignItems: "center" },
   submittedHeading: { marginLeft: space.sm, color: colors.primary, fontFamily: fonts.bodyBold },
   submittedAt: { marginTop: space.sm, color: colors.outline, fontSize: 9 },
+  attachmentBlock: { marginTop: space.md },
+  attachmentPreview: { width: "100%", height: 220, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
   attachment: { marginTop: space.md },
   approved: { marginTop: space.md, padding: space.md, borderRadius: radius.lg, backgroundColor: "#D1FAE5" },
   approvedTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },

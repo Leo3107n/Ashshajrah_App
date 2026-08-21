@@ -42,6 +42,32 @@ export function lectureDate(value, options = {}) {
   });
 }
 
+function startOfLocalDayTimestamp(value) {
+  if (!value) return 0;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 0;
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function classActionState(item) {
+  const now = Date.now();
+  const classDateStart = startOfLocalDayTimestamp(item?.scheduled_start);
+  const end = item?.scheduled_end ? new Date(item.scheduled_end).getTime() : 0;
+  const status = String(item?.display_status || item?.status || "").toLowerCase();
+  const future = Boolean(classDateStart && now < classDateStart);
+  const ended = Boolean(
+    end ? now > end : ["completed", "completed_by_teacher", "verified_by_coordinator"].includes(status)
+  );
+  const recordingAvailable = ended && Boolean(item?.recording_drive_url);
+
+  return {
+    future,
+    canJoin: !future && !recordingAvailable && Boolean(item?.google_meet_link),
+    canWatchRecording: recordingAvailable,
+  };
+}
+
 export default function StudentLectureSheet({ lecture, onClose }) {
   const [item, setItem] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -78,7 +104,7 @@ export default function StudentLectureSheet({ lecture, onClose }) {
 
   const detail = item || lecture;
   const status = detail?.display_status || detail?.status;
-  const hasMeetLink = Boolean(detail?.google_meet_link);
+  const action = classActionState(detail);
 
   return (
     <Modal
@@ -121,9 +147,6 @@ export default function StudentLectureSheet({ lecture, onClose }) {
                   </View>
                   <View style={styles.titleCopy}>
                     <AppText style={styles.title}>{detail?.title}</AppText>
-                    <AppText style={styles.teacher}>
-                      {detail?.teacher_name || "Teacher"}
-                    </AppText>
                   </View>
                   <StatusChip tone={lectureTone(status)}>{readable(status)}</StatusChip>
                 </View>
@@ -148,7 +171,7 @@ export default function StudentLectureSheet({ lecture, onClose }) {
                   <Section label="Topic covered" value={detail.topic_covered} />
                 ) : null}
                 {detail?.summary ? (
-                  <Section label="Teacher summary" value={detail.summary} />
+                  <Section label="Class summary" value={detail.summary} />
                 ) : null}
                 {detail?.homework_given ? (
                   <Section label="Homework given" value={detail.homework_given} />
@@ -160,16 +183,16 @@ export default function StudentLectureSheet({ lecture, onClose }) {
                   />
                 ) : null}
 
-                {hasMeetLink ? (
+                {action.canJoin ? (
                   <PillButton
                     icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
                     onPress={() => Linking.openURL(detail.google_meet_link)}
                     style={styles.action}
                   >
-                    Open Google Meet
+                    Join Class
                   </PillButton>
                 ) : null}
-                {detail?.recording_drive_url ? (
+                {action.canWatchRecording ? (
                   <PillButton
                     icon={<Ionicons color={colors.white} name="play-circle-outline" size={18} />}
                     onPress={() => Linking.openURL(detail.recording_drive_url)}
@@ -177,6 +200,12 @@ export default function StudentLectureSheet({ lecture, onClose }) {
                   >
                     Watch Recording
                   </PillButton>
+                ) : null}
+                {action.future ? (
+                  <View style={styles.notice}>
+                    <Ionicons color={colors.secondary} name="time-outline" size={18} />
+                    <AppText style={styles.noticeText}>This class has not started yet.</AppText>
+                  </View>
                 ) : null}
               </>
             )}
@@ -257,6 +286,8 @@ const styles = StyleSheet.create({
   sectionLabel: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.base },
   sectionText: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 19 },
   action: { marginTop: space.lg },
+  notice: { flexDirection: "row", alignItems: "center", marginTop: space.lg, padding: space.md, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  noticeText: { flex: 1, marginLeft: space.sm, color: colors.primary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
   state: { alignItems: "center", paddingVertical: space["2xl"] },
   stateText: { marginTop: space.sm, color: colors.onSurfaceVariant },
   error: { flexDirection: "row", padding: space.md, borderRadius: radius.lg, backgroundColor: colors.errorContainer },

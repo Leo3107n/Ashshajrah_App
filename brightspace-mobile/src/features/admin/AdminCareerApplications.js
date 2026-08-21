@@ -196,7 +196,7 @@ const styles = StyleSheet.create({
   sheet: { position: "absolute", right: 0, bottom: 0, left: 0, maxHeight: "85%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },
-  sheetTop: { flexDirection: "row", alignItems: "flex-start", marginBottom: space.md },
+  sheetTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space.md },
   sheetIdentity: { flex: 1 },
   sheetMeta: { marginTop: 2, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   close: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.surfaceHigh },

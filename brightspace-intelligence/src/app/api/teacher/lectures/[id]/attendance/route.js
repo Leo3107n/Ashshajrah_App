@@ -3,10 +3,16 @@ import { requireRole, roleGuardResponse } from "@/lib/roleGuard";
 import prisma from "@/lib/prisma";
 
 const ALLOWED_ROLES = ["teacher", "admin"];
-const VALID = new Set(["present", "absent", "late", "partial"]);
+const VALID = new Set(["present", "absent", "leave", "late", "partial"]);
 
 function json(message, status = 200, extra = {}) {
   return NextResponse.json({ message, ...extra }, { status });
+}
+
+async function ensureLeaveEnumValue() {
+  await prisma.$executeRawUnsafe(`
+    ALTER TYPE attendance_status ADD VALUE IF NOT EXISTS 'leave'
+  `);
 }
 
 export async function POST(request, { params }) {
@@ -38,6 +44,8 @@ export async function POST(request, { params }) {
           LIMIT 1
         `;
     if (!lecture?.id) return json("Lecture not found.", 404);
+
+    await ensureLeaveEnumValue();
 
     await prisma.$executeRaw`
       INSERT INTO lecture_attendance (id, lecture_id, user_id, role_type, source, status, created_at, updated_at)

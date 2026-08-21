@@ -6,8 +6,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import {
   AppText,
@@ -19,6 +19,7 @@ import {
 } from "../../components/ui";
 import { useAuth } from "../../context/AuthContext";
 import ChildDropdown from "./components/ChildDropdown";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 function firstName(user) {
@@ -59,25 +60,63 @@ function childLectures(child) {
   return Array.isArray(child?.today_lectures) ? child.today_lectures : [];
 }
 
+function uniqueChildren(children) {
+  const seen = new Set();
+  const result = [];
+  for (const child of Array.isArray(children) ? children : []) {
+    const key = child?.id || childDisplayName(child);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(child);
+  }
+  return result;
+}
+
+function isOtherEducationalDocument(item) {
+  const type = String(item?.type || item?.document_type || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return ["other", "other document", "other documents", "parent guide", "yearly plan"].includes(type);
+}
+
 function feeDeadlineBanner(children) {
-  const missed = (Array.isArray(children) ? children : [])
-    .filter((child) => child?.fee_deadline_missed)
+  const target = (Array.isArray(children) ? children : [])
+    .filter((child) => {
+      const status = String(child?.fee_status || "").toLowerCase();
+      return child?.fee_due_date && !["verified", "approved", "paid", "submitted"].includes(status);
+    })
     .sort((left, right) => {
-      const leftTime = left?.fee_due_date ? new Date(left.fee_due_date).getTime() : Number.POSITIVE_INFINITY;
-      const rightTime = right?.fee_due_date ? new Date(right.fee_due_date).getTime() : Number.POSITIVE_INFINITY;
-      return leftTime - rightTime;
+      const leftOverdue = left?.fee_deadline_missed ? 0 : 1;
+      const rightOverdue = right?.fee_deadline_missed ? 0 : 1;
+      if (leftOverdue !== rightOverdue) return leftOverdue - rightOverdue;
+      const leftTime = left?.fee_due_date ? new Date(left.fee_due_date).getTime() : 0;
+      const rightTime = right?.fee_due_date ? new Date(right.fee_due_date).getTime() : 0;
+      return rightTime - leftTime;
     })[0];
 
-  if (!missed) return null;
+  if (!target) return null;
 
-  const parsed = missed.fee_due_date ? new Date(missed.fee_due_date) : null;
+  const parsed = target.fee_due_date ? new Date(target.fee_due_date) : null;
   const dueLabel = parsed && !Number.isNaN(parsed.getTime())
     ? parsed.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" })
     : "";
 
-  return dueLabel
-    ? `Fee Deadline was ${dueLabel} for ${childDisplayName(missed)}.`
-    : `Fee Deadline is missed for ${childDisplayName(missed)}.`;
+  if (target.fee_deadline_missed) {
+    return {
+      tone: "overdue",
+      message: dueLabel
+      ? `Fee Deadline was ${dueLabel} for ${childDisplayName(target)}.`
+      : `Fee Deadline is missed for ${childDisplayName(target)}.`,
+    };
+  }
+
+  return {
+    tone: "upcoming",
+    message: dueLabel
+    ? `Fee Deadline is ${dueLabel} for ${childDisplayName(target)}.`
+    : `Fee voucher deadline is pending for ${childDisplayName(target)}.`,
+  };
 }
 
 function dateLabel(value) {
@@ -118,22 +157,18 @@ export default function ParentHome() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
-  const [selectedChildId, setSelectedChildId] = useState("");
-  const [childSelectionTouched, setChildSelectionTouched] = useState(false);
-  const initializedChildrenRef = useRef(false);
+  const [selectedChildId, setParentSelectedChildId] = useParentChildSelection(data.children);
   const selectedChildren = useMemo(() => {
     if (data.children.length <= 1) return data.children;
-    if (!childSelectionTouched) return [];
     if (!selectedChildId) return [];
     return data.children.filter((child) => child.id === selectedChildId);
-  }, [childSelectionTouched, data.children, selectedChildId]);
+  }, [data.children, selectedChildId]);
   const deadlineBanner = useMemo(() => {
-    if (data.children.length <= 1) return feeDeadlineBanner(data.children);
-    return childSelectionTouched && selectedChildId ? feeDeadlineBanner(selectedChildren) : null;
-  }, [childSelectionTouched, data.children, selectedChildId, selectedChildren]);
+    return feeDeadlineBanner(data.children);
+  }, [data.children]);
   const showChildPrompt = data.children.length > 1 && !selectedChildren.length;
   const dashboardPlan = useMemo(() => pickDashboardPlan(data.monthlyPlans), [data.monthlyPlans]);
-  const visibleSelectedChildId = data.children.length > 1 && !childSelectionTouched ? "" : selectedChildId;
+  const visibleSelectedChildId = selectedChildId;
 
   const load = useCallback(async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
@@ -145,7 +180,7 @@ export default function ParentHome() {
         api.shared.monthlyPlans({ status: "all" }),
       ]);
       setData({
-        children: dashboard?.children || [],
+        children: uniqueChildren(dashboard?.children),
         headlines: dashboard?.headlines || [],
         monthlyPlans: monthlyPlans?.items || [],
         monthlyPlanSummary: monthlyPlans?.summary || {},
@@ -161,24 +196,6 @@ export default function ParentHome() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
-
-  useEffect(() => {
-    if (data.children.length === 1) {
-      setSelectedChildId(data.children[0]?.id || "");
-      setChildSelectionTouched(true);
-      initializedChildrenRef.current = true;
-      return;
-    }
-    if (data.children.length > 1 && !initializedChildrenRef.current) {
-      initializedChildrenRef.current = true;
-      setChildSelectionTouched(false);
-      setSelectedChildId("");
-      return;
-    }
-    if (selectedChildId && data.children.some((child) => child.id === selectedChildId)) return;
-    setChildSelectionTouched(false);
-    setSelectedChildId("");
-  }, [data.children, selectedChildId]);
 
   if (loading) return <DashboardSkeleton message="Preparing your parent portal..." />;
 
@@ -198,13 +215,16 @@ export default function ParentHome() {
   return (
     <Screen
       contentContainerStyle={styles.content}
-      refreshControl={
-        <RefreshControl
-          colors={[colors.gold]}
-          onRefresh={() => load({ refresh: true })}
-          refreshing={refreshing}
-          tintColor={colors.gold}
-        />
+        refreshControl={
+          <RefreshControl
+            colors={[colors.gold]}
+            onRefresh={() => {
+              setParentSelectedChildId("");
+              load({ refresh: true });
+            }}
+            refreshing={refreshing}
+            tintColor={colors.gold}
+          />
       }
     >
       <LinearGradient colors={[colors.primaryContainer, "#0D5C48"]} style={styles.hero}>
@@ -218,23 +238,25 @@ export default function ParentHome() {
               Stay close to your child's learning journey.
             </AppText>
           </View>
-          <Pressable
-            accessibilityLabel="Open notifications"
-            onPress={() => router.push("/(app)/parent/profile")}
-            style={styles.bell}
-          >
-            <Ionicons color={colors.white} name="notifications-outline" size={21} />
-            {Number(data.notificationSummary.unread || 0) > 0 ? (
-              <View style={styles.unreadDot} />
-            ) : null}
-          </Pressable>
         </View>
       </LinearGradient>
 
       {deadlineBanner ? (
-        <SurfaceCard style={styles.deadlineBanner}>
-          <Ionicons color={colors.error} name="alert-circle-outline" size={20} />
-          <AppText style={styles.deadlineBannerText}>{deadlineBanner}</AppText>
+        <SurfaceCard style={[
+          styles.deadlineBanner,
+          deadlineBanner.tone === "upcoming" && styles.deadlineBannerUpcoming,
+        ]}>
+          <Ionicons
+            color={deadlineBanner.tone === "upcoming" ? "#2563EB" : colors.error}
+            name={deadlineBanner.tone === "upcoming" ? "calendar-outline" : "alert-circle-outline"}
+            size={20}
+          />
+          <AppText style={[
+            styles.deadlineBannerText,
+            deadlineBanner.tone === "upcoming" && styles.deadlineBannerTextUpcoming,
+          ]}>
+            {deadlineBanner.message}
+          </AppText>
         </SurfaceCard>
       ) : null}
 
@@ -251,10 +273,7 @@ export default function ParentHome() {
         <ChildDropdown
           children={data.children}
           label="SELECT CHILD"
-          onChange={(childId) => {
-            setChildSelectionTouched(true);
-            setSelectedChildId(childId);
-          }}
+          onChange={setParentSelectedChildId}
           placeholder="Choose a child to view class schedule"
           selectedId={visibleSelectedChildId}
         />
@@ -310,11 +329,6 @@ export default function ParentHome() {
           icon="book-outline"
           label="Homework"
           onPress={() => router.push("/(app)/parent/homework")}
-        />
-        <QuickAction
-          icon="videocam-outline"
-          label="Lectures"
-          onPress={() => router.push("/(app)/parent/lectures")}
         />
         <QuickAction
           icon="chatbubbles-outline"
@@ -399,10 +413,10 @@ function ChildCard({ child, onCalendar, onFees }) {
           value={`${attendancePct}%`}
         />
         <Stat
-          icon="book-outline"
-          label="Subjects"
+          icon="videocam-outline"
+          label="Attended"
           tone="neutral"
-          value={String(child.total_subjects || 0)}
+          value={String(child.attended_lectures ?? child.attended_classes ?? 0)}
         />
         <Stat
           icon="clipboard-outline"
@@ -422,7 +436,7 @@ function ChildCard({ child, onCalendar, onFees }) {
               {nextLecture.subject_name || nextLecture.title || "Class"}
             </AppText>
             <AppText style={styles.nextTime}>
-              Today, {time(nextLecture.scheduled_start)} · {nextLecture.teacher_name || "Teacher"}
+              Today, {time(nextLecture.scheduled_start)}
             </AppText>
           </View>
           <StatusChip tone="warning">
@@ -446,6 +460,8 @@ function ChildCard({ child, onCalendar, onFees }) {
         </View>
       )}
 
+      <EducationalDocuments documents={child.educational_documents} />
+
       {/* Actions */}
       <View style={styles.childActions}>
         <Pressable onPress={onCalendar} style={styles.childAction}>
@@ -459,6 +475,122 @@ function ChildCard({ child, onCalendar, onFees }) {
         </Pressable>
       </View>
     </SurfaceCard>
+  );
+}
+
+function EducationalDocuments({ documents }) {
+  const [documentGroup, setDocumentGroup] = useState("");
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const items = Array.isArray(documents) ? documents.filter((item) => item?.url || item?.path) : [];
+  const classDocuments = items.filter((item) => !isOtherEducationalDocument(item));
+  const otherDocuments = items.filter(isOtherEducationalDocument);
+  const groups = [
+    { key: "class", label: "Class Documents", items: classDocuments },
+    { key: "other", label: "Other Documents", items: otherDocuments },
+  ];
+  const activeGroup = groups.find((group) => group.key === documentGroup);
+  const visibleItems = activeGroup?.items || [];
+
+  return (
+    <View style={styles.documents}>
+      <View style={styles.documentsHeader}>
+        <View style={styles.documentsTitleWrap}>
+          <Ionicons color={colors.secondary} name="document-text-outline" size={16} />
+          <AppText style={styles.documentsTitle}>Educational Documents</AppText>
+        </View>
+        <AppText style={styles.documentsCount}>{items.length}</AppText>
+      </View>
+      <Pressable onPress={() => setSelectorOpen(true)} style={styles.documentsDropdown}>
+        <View style={styles.documentsDropdownCopy}>
+          <AppText style={styles.documentsDropdownLabel}>DOCUMENT GROUP</AppText>
+          <AppText style={[styles.documentsDropdownValue, !activeGroup && styles.documentsDropdownPlaceholder]}>
+            {activeGroup?.label || "Select document type"}
+          </AppText>
+        </View>
+        <Ionicons color={colors.outline} name="chevron-down" size={18} />
+      </Pressable>
+
+      {!activeGroup ? (
+        <View style={styles.noDocuments}>
+          <Ionicons color={colors.outline} name="chevron-down-circle-outline" size={16} />
+          <AppText style={styles.noDocumentsText}>Choose Class Documents or Other Documents to view files.</AppText>
+        </View>
+      ) : visibleItems.length ? (
+        <View style={styles.documentList}>
+          {visibleItems.map((item) => (
+            <Pressable
+              disabled={!item.url}
+              key={item.key || item.label || item.path}
+              onPress={() => item.url && Linking.openURL(item.url)}
+              style={styles.documentRow}
+            >
+              <View style={styles.documentIcon}>
+                <Ionicons color={colors.secondary} name="document-attach-outline" size={16} />
+              </View>
+              <View style={styles.documentCopy}>
+                <AppText numberOfLines={1} style={styles.documentLabel}>
+                  {item.label || "Educational Document"}
+                </AppText>
+                {item.type ? (
+                  <AppText numberOfLines={1} style={styles.documentType}>
+                    {readable(item.type)}
+                  </AppText>
+                ) : null}
+              </View>
+              <Ionicons color={colors.outline} name="download-outline" size={15} />
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.noDocuments}>
+          <Ionicons color={colors.outline} name="folder-open-outline" size={16} />
+          <AppText style={styles.noDocumentsText}>No {activeGroup.label.toLowerCase()} available yet.</AppText>
+        </View>
+      )}
+
+      <Modal animationType="slide" onRequestClose={() => setSelectorOpen(false)} transparent visible={selectorOpen}>
+        <View style={styles.documentsModalBackdrop}>
+          <View style={styles.documentsSheet}>
+            <View style={styles.documentsSheetHandle} />
+            <View style={styles.documentsSheetHeader}>
+              <AppText style={styles.documentsSheetTitle}>Educational Documents</AppText>
+              <Pressable accessibilityLabel="Close document selector" onPress={() => setSelectorOpen(false)} style={styles.documentsCloseButton}>
+                <Ionicons color={colors.onSurfaceVariant} name="close" size={22} />
+              </Pressable>
+            </View>
+            <View style={styles.documentsOptions}>
+              {groups.map((group) => {
+                const active = group.key === activeGroup?.key;
+                return (
+                  <Pressable
+                    key={group.key}
+                    onPress={() => {
+                      setDocumentGroup(group.key);
+                      setSelectorOpen(false);
+                    }}
+                    style={[styles.documentsOption, active && styles.documentsOptionActive]}
+                  >
+                    <View style={styles.documentsOptionCopy}>
+                      <AppText style={[styles.documentsOptionTitle, active && styles.documentsOptionTitleActive]}>
+                        {group.label}
+                      </AppText>
+                      <AppText style={[styles.documentsOptionMeta, active && styles.documentsOptionMetaActive]}>
+                        {group.items.length} document{group.items.length === 1 ? "" : "s"}
+                      </AppText>
+                    </View>
+                    <Ionicons
+                      color={active ? colors.white : colors.outline}
+                      name={active ? "checkmark-circle" : "ellipse-outline"}
+                      size={20}
+                    />
+                  </Pressable>
+                );
+              })}
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </View>
   );
 }
 
@@ -547,7 +679,7 @@ function MonthlyPlanPreview({ item, onPress, summary }) {
           </View>
         </View>
         <View style={styles.planFooter}>
-          <AppText style={styles.planFooterText}>Tap to open images, videos, and all plans</AppText>
+          <AppText style={styles.planFooterText}>Tap to view images, videos, and all plans in the app</AppText>
           <Ionicons color={colors.secondary} name="arrow-forward-outline" size={17} />
         </View>
       </SurfaceCard>
@@ -563,10 +695,10 @@ const styles = StyleSheet.create({
   eyebrow: { color: "#B9EEDB", fontFamily: fonts.bodyBold, fontSize: 10, letterSpacing: 1.2 },
   greeting: { marginTop: space.xs, color: colors.white, fontSize: 27, lineHeight: 34 },
   heroBody: { marginTop: space.xs, color: "#D6E9E2", fontSize: fontSize.sm },
-  bell: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(255,255,255,0.12)" },
-  unreadDot: { position: "absolute", top: 8, right: 8, width: 8, height: 8, borderWidth: 1.5, borderColor: colors.primaryContainer, borderRadius: 4, backgroundColor: colors.gold },
   deadlineBanner: { flexDirection: "row", alignItems: "center", marginTop: space.md, backgroundColor: colors.errorContainer, borderColor: colors.error, borderWidth: 1 },
+  deadlineBannerUpcoming: { backgroundColor: "#DBEAFE", borderColor: "#2563EB" },
   deadlineBannerText: { flex: 1, marginLeft: space.sm, color: colors.error, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  deadlineBannerTextUpcoming: { color: "#1D4ED8" },
   sectionTitle: { marginTop: space.xl, marginBottom: space.sm, color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   childCard: { marginBottom: space.md },
   childHeader: { flexDirection: "row", alignItems: "center" },
@@ -587,6 +719,37 @@ const styles = StyleSheet.create({
   meetButton: { marginTop: space.sm },
   noCLass: { flexDirection: "row", alignItems: "center", marginTop: space.md, padding: space.sm },
   noClassText: { marginLeft: space.sm, color: colors.outline, fontSize: fontSize.xs },
+  documents: { marginTop: space.md, padding: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.lg, backgroundColor: colors.surfaceLow },
+  documentsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  documentsTitleWrap: { flexDirection: "row", alignItems: "center", gap: space.xs },
+  documentsTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsCount: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsDropdown: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.sm, paddingHorizontal: space.md, paddingVertical: space.xs, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  documentsDropdownCopy: { flex: 1, marginRight: space.sm },
+  documentsDropdownLabel: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1 },
+  documentsDropdownValue: { marginTop: 1, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentList: { gap: space.xs, marginTop: space.sm },
+  documentRow: { minHeight: 50, flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, paddingVertical: space.xs, borderRadius: radius.md, backgroundColor: colors.surface },
+  documentIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center", marginRight: space.sm, borderRadius: 14, backgroundColor: colors.goldPale },
+  documentCopy: { flex: 1 },
+  documentLabel: { color: colors.primary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  documentType: { marginTop: 2, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
+  noDocuments: { flexDirection: "row", alignItems: "center", marginTop: space.sm, paddingVertical: space.xs },
+  noDocumentsText: { flex: 1, marginLeft: space.xs, color: colors.outline, fontSize: 10 },
+  documentsModalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
+  documentsSheet: { paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
+  documentsSheetHandle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
+  documentsSheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  documentsSheetTitle: { flex: 1, color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
+  documentsCloseButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.surfaceLow },
+  documentsOptions: { padding: space.lg, gap: space.sm, paddingBottom: space["3xl"] },
+  documentsOption: { flexDirection: "row", alignItems: "center", padding: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.xl, backgroundColor: colors.surface },
+  documentsOptionActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
+  documentsOptionCopy: { flex: 1, marginRight: space.sm },
+  documentsOptionTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsOptionTitleActive: { color: colors.white },
+  documentsOptionMeta: { marginTop: 2, color: colors.outline, fontSize: 10 },
+  documentsOptionMetaActive: { color: "#D6E9E2" },
   childActions: { flexDirection: "row", marginTop: space.md, paddingTop: space.md, borderTopWidth: 1, borderTopColor: colors.borderGreen },
   childAction: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.xs },
   childActionText: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },

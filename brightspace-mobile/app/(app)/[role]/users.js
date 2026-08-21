@@ -429,7 +429,7 @@ const styles = StyleSheet.create({
   sheet: { maxHeight: "84%", borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", marginTop: space.sm, borderRadius: 2, backgroundColor: colors.borderGreen },
   sheetContent: { padding: space.lg, paddingBottom: 36 },
-  sheetTop: { flexDirection: "row", alignItems: "center" },
+  sheetTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   largeAvatar: { width: 54, height: 54, alignItems: "center", justifyContent: "center", borderRadius: 27, backgroundColor: colors.primaryContainer },
   largeAvatarText: { color: colors.white, fontFamily: fonts.displayBold, fontSize: fontSize.lg },
   sheetIdentity: { flex: 1, marginLeft: space.md },

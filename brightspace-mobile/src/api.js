@@ -663,6 +663,7 @@ export const studentApi = {
   timeline: (query) => get("/api/student/timeline", query),
   calendar: (query) => get("/api/student/calendar", query),
   calendarLectures: (query) => get("/api/student/calendar-lectures", query),
+  calendarEvents: (query) => get("/api/calendar-events", query),
 
   profile: {
     get: () => get("/api/student/profile"),
@@ -689,6 +690,7 @@ export const parentApi = {
   children: (query) => get("/api/parent/children", query),
   classes: (query) => get("/api/parent/classes", query),
   lectures: (query) => get("/api/parent/lectures", query),
+  calendarEvents: (query) => get("/api/calendar-events", query),
   attendance: (query) => get("/api/parent/attendance", query),
   homework: (query) => get("/api/parent/homework", query),
   fees: (query) => get("/api/parent/fees", query),

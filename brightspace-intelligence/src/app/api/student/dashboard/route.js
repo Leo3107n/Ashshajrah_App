@@ -2,16 +2,46 @@ import { NextResponse } from "next/server";
 import { requireRole, roleGuardResponse } from "@/lib/roleGuard";
 import prisma from "@/lib/prisma";
 import { getActiveHeadlines } from "@/lib/headlines";
+import { classEducationalDocumentsFromRow } from "@/lib/educationalDocuments";
 
 function json(message, status = 200, extra = {}) {
   return NextResponse.json({ message, ...extra }, { status });
 }
 
+function normalizedDocumentType(value) {
+  return String(value || "").toLowerCase().replace(/[_-]+/g, " ").trim();
+}
+
+function documentBuckets(documents) {
+  const items = Array.isArray(documents) ? documents : [];
+  const otherTypes = new Set(["other", "other document", "other documents", "parent guide", "yearly plan"]);
+  return {
+    class_documents: items.filter((item) => String(item?.class_level || "").trim()),
+    other_documents: items.filter((item) => otherTypes.has(normalizedDocumentType(item?.type))),
+  };
+}
+
 async function getStudent(session) {
   const [student] = await prisma.$queryRaw`
-    SELECT sp.id::text AS id, u.id::text AS user_id
+    SELECT
+      sp.id::text AS id,
+      u.id::text AS user_id,
+      e.course_id::text AS course_id,
+      COALESCE(c.class_level, sp.grade_level, c.title, '')::text AS class_level,
+      sp.grade_level::text AS grade_level,
+      c.class_level::text AS course_class_level,
+      c.title::text AS course_title
     FROM student_profiles sp
     INNER JOIN users u ON u.id = sp.user_id
+    LEFT JOIN LATERAL (
+      SELECT e.*
+      FROM enrollments e
+      WHERE e.student_id = sp.id
+        AND LOWER(e.status) = 'active'
+      ORDER BY e.start_date DESC NULLS LAST, e.created_at DESC NULLS LAST
+      LIMIT 1
+    ) e ON TRUE
+    LEFT JOIN courses c ON c.id = e.course_id
     WHERE sp.user_id = ${session.user.id}::uuid
     LIMIT 1
   `;
@@ -188,9 +218,15 @@ export async function GET() {
       getActiveHeadlines(),
     ]);
 
+    const educationalDocuments = await classEducationalDocumentsFromRow(student);
+    const buckets = documentBuckets(educationalDocuments);
+
     return json("Student dashboard fetched.", 200, {
       stats: stats?.[0] || {},
       headlines,
+      educational_documents: educationalDocuments,
+      class_documents: buckets.class_documents,
+      other_documents: buckets.other_documents,
     });
   } catch (error) {
     const guard = roleGuardResponse(error);

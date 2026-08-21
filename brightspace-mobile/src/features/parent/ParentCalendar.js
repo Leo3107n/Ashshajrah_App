@@ -19,13 +19,25 @@ import {
 } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 
 const PERIODS = [
-  ["selected_date", "Day"],
   ["selected_week", "Week"],
   ["selected_month", "Month"],
 ];
+
+function uniqueEvents(items) {
+  const seen = new Set();
+  const result = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = String(item?.id || item?.raw_id || `${item?.type || "event"}-${item?.title || ""}-${item?.starts_at || ""}`);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
 
 function localDateKey(date = new Date()) {
   const y = date.getFullYear();
@@ -51,12 +63,55 @@ function lectureTone(value) {
   return "neutral";
 }
 
+function startOfLocalDayTimestamp(value) {
+  if (!value) return 0;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 0;
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function classActionState(item) {
+  const now = Date.now();
+  const classDateStart = startOfLocalDayTimestamp(item?.scheduled_start);
+  const end = item?.scheduled_end ? new Date(item.scheduled_end).getTime() : 0;
+  const status = String(item?.display_status || item?.status || "").toLowerCase();
+  const future = Boolean(classDateStart && now < classDateStart);
+  const ended = Boolean(
+    end ? now > end : ["completed", "completed_by_teacher", "verified_by_coordinator"].includes(status)
+  );
+  const recordingAvailable = ended && Boolean(item?.recording_drive_url);
+
+  return {
+    future,
+    canJoin: !future && !recordingAvailable && Boolean(item?.google_meet_link),
+    canWatchRecording: recordingAvailable,
+  };
+}
+
+function eventActionState(item) {
+  const now = Date.now();
+  const eventDateStart = startOfLocalDayTimestamp(item?.starts_at);
+  const end = item?.ends_at ? new Date(item.ends_at).getTime() : 0;
+  const future = Boolean(eventDateStart && now < eventDateStart);
+  const ended = Boolean(end && now > end);
+  const recordingAvailable = ended && Boolean(item?.recording_drive_url);
+
+  return {
+    future,
+    canJoin: !future && !recordingAvailable && Boolean(item?.meet_link),
+    canWatchRecording: recordingAvailable,
+  };
+}
+
 export default function ParentCalendar() {
   const [selectedDate, setSelectedDate] = useState(localDateKey());
-  const [period, setPeriod] = useState("selected_date");
-  const [childFilter, setChildFilter] = useState("");
-  const [subjectFilter, setSubjectFilter] = useState("");
+  const [period, setPeriod] = useState("selected_week");
   const [data, setData] = useState({ items: [], children: [], subjects: [], markedDates: [] });
+  const [internalEvents, setInternalEvents] = useState([]);
+  const [publicEvents, setPublicEvents] = useState([]);
+  const [eventType, setEventType] = useState("internal");
+  const [childFilter, setChildFilter] = useParentChildSelection(data.children);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -66,40 +121,44 @@ export default function ParentCalendar() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const response = await api.parent.classes({
-        range: period,
-        date: selectedDate,
-        childId: childFilter || undefined,
-        subjectId: subjectFilter || undefined,
-      });
+      const [response, internalEventResponse, publicEventResponse] = await Promise.all([
+        api.parent.classes({
+          range: period,
+          date: selectedDate,
+          childId: childFilter || undefined,
+        }),
+        api.parent.calendarEvents({
+          range: period,
+          date: selectedDate,
+          type: "internal",
+        }),
+        api.parent.calendarEvents({
+          range: period,
+          date: selectedDate,
+          type: "public",
+        }),
+      ]);
       setData({
         items: response?.items || [],
         children: response?.children || [],
         subjects: response?.subjects || [],
         markedDates: response?.markedDates || [],
       });
+      setInternalEvents(uniqueEvents(internalEventResponse?.items));
+      setPublicEvents(uniqueEvents(publicEventResponse?.items));
     } catch (nextError) {
       setError(nextError?.message || "Unable to load the class calendar.");
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period, selectedDate, childFilter, subjectFilter]);
+  }, [period, selectedDate, childFilter]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     setSelectedLecture(null);
-  }, [period, selectedDate, childFilter, subjectFilter]);
-
-  useEffect(() => {
-    if (data.children.length === 1) {
-      setChildFilter(data.children[0]?.id || "");
-      return;
-    }
-    if (childFilter && data.children.some((child) => child.id === childFilter)) return;
-    setChildFilter("");
-  }, [childFilter, data.children]);
+  }, [period, selectedDate, childFilter]);
 
   const requiresChildSelection = data.children.length > 1 && !childFilter;
 
@@ -126,7 +185,10 @@ export default function ParentCalendar() {
         refreshControl={
           <RefreshControl
             colors={[colors.gold]}
-            onRefresh={() => load({ refresh: true })}
+            onRefresh={() => {
+              setChildFilter("");
+              if (!childFilter) load({ refresh: true });
+            }}
             refreshing={refreshing}
             tintColor={colors.gold}
           />
@@ -185,32 +247,9 @@ export default function ParentCalendar() {
           />
         ) : null}
 
-        {/* Subject filter */}
-        {data.subjects.length > 1 ? (
-          <ScrollView
-            contentContainerStyle={styles.subFilters}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-          >
-            <FilterChip
-              active={!subjectFilter}
-              label="All Subjects"
-              onPress={() => setSubjectFilter("")}
-            />
-            {data.subjects.map((subject) => (
-              <FilterChip
-                active={subjectFilter === subject.id}
-                key={subject.id}
-                label={subject.name}
-                onPress={() => setSubjectFilter(subject.id)}
-              />
-            ))}
-          </ScrollView>
-        ) : null}
-
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Classes</AppText>
-          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled this {period === "selected_date" ? "day" : period === "selected_week" ? "week" : "month"}</AppText>
+          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled this {period === "selected_week" ? "week" : "month"}</AppText>
         </View>
 
         {error ? (
@@ -238,6 +277,15 @@ export default function ParentCalendar() {
             </AppText>
           </SurfaceCard>
         )}
+
+        <EventSection
+          activeType={eventType}
+          error={error}
+          internalEvents={internalEvents}
+          onChangeType={setEventType}
+          period={period}
+          publicEvents={publicEvents}
+        />
       </Screen>
 
       {/* Detail sheet */}
@@ -248,6 +296,114 @@ export default function ParentCalendar() {
         />
       ) : null}
     </>
+  );
+}
+
+function EventSection({ activeType, error, internalEvents, onChangeType, period, publicEvents }) {
+  const options = [
+    ["internal", "Internal Events", internalEvents],
+    ["public", "Public Events", publicEvents],
+  ];
+  const activeOption = options.find(([type]) => type === activeType) || options[0];
+  const [type, title, events] = activeOption;
+
+  return (
+    <>
+      <View style={styles.sectionHeader}>
+        <AppText style={styles.sectionTitle}>Events</AppText>
+        <AppText style={styles.count}>{events.length} this {period === "selected_week" ? "week" : "month"}</AppText>
+      </View>
+
+      <View style={styles.eventTypeRow}>
+        {options.map(([optionType, optionLabel, optionEvents]) => (
+          <Pressable
+            key={optionType}
+            onPress={() => onChangeType(optionType)}
+            style={[styles.eventTypeOption, activeType === optionType && styles.eventTypeOptionActive]}
+          >
+            <AppText style={[styles.eventTypeText, activeType === optionType && styles.eventTypeTextActive]}>
+              {optionLabel}
+            </AppText>
+            <AppText style={[styles.eventTypeCount, activeType === optionType && styles.eventTypeTextActive]}>
+              {optionEvents.length}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+
+      {error ? null : events.length ? (
+        events.map((item) => <EventRow item={item} key={item.id || item.raw_id || `${item.type}-${item.title}-${item.starts_at}`} />)
+      ) : (
+        <SurfaceCard style={styles.state}>
+          <Ionicons color={colors.secondary} name="calendar-number-outline" size={30} />
+          <AppText style={styles.stateTitle}>No {type} events</AppText>
+          <AppText style={styles.stateText}>
+            Select another week or month to view available events.
+          </AppText>
+        </SurfaceCard>
+      )}
+    </>
+  );
+}
+
+function EventRow({ item }) {
+  const action = eventActionState(item);
+  return (
+    <SurfaceCard style={styles.eventRow}>
+      <View style={styles.eventIcon}>
+        <Ionicons
+          color={colors.secondary}
+          name={item.type === "internal" ? "people-outline" : "megaphone-outline"}
+          size={19}
+        />
+      </View>
+      <View style={styles.eventBody}>
+        <View style={styles.lectureTop}>
+          <AppText numberOfLines={1} style={styles.subject}>{item.title}</AppText>
+          <StatusChip tone={item.type === "internal" ? "warning" : "success"}>
+            {readable(item.type)}
+          </StatusChip>
+        </View>
+        <AppText style={styles.metaText}>
+          {timeLabel(item.starts_at)} - {timeLabel(item.ends_at)}
+          {item.host_name ? ` · ${item.host_name}` : ""}
+        </AppText>
+        {item.description ? (
+          <AppText numberOfLines={2} style={styles.eventDescription}>{item.description}</AppText>
+        ) : null}
+        {action.canJoin ? (
+          <EventActionButton
+            icon="videocam-outline"
+            onPress={() => Linking.openURL(item.meet_link)}
+          >
+            Join Event
+          </EventActionButton>
+        ) : null}
+        {action.canWatchRecording ? (
+          <EventActionButton
+            icon="play-circle-outline"
+            onPress={() => Linking.openURL(item.recording_drive_url)}
+          >
+            Watch Recording
+          </EventActionButton>
+        ) : null}
+        {action.future ? (
+          <View style={styles.eventNotice}>
+            <Ionicons color={colors.secondary} name="time-outline" size={15} />
+            <AppText style={styles.eventNoticeText}>This event has not started yet.</AppText>
+          </View>
+        ) : null}
+      </View>
+    </SurfaceCard>
+  );
+}
+
+function EventActionButton({ children, icon, onPress }) {
+  return (
+    <Pressable onPress={onPress} style={styles.eventAction}>
+      <Ionicons color={colors.white} name={icon} size={15} />
+      <AppText style={styles.eventActionText}>{children}</AppText>
+    </Pressable>
   );
 }
 
@@ -272,13 +428,12 @@ function LectureRow({ item, onPress }) {
         {item.student_name ? (
           <AppText style={styles.childName}>{item.student_name}</AppText>
         ) : null}
-        <View style={styles.meta}>
-          <Ionicons color={colors.outline} name="person-outline" size={14} />
-          <AppText style={styles.metaText}>{item.teacher_name || "Teacher"}</AppText>
-          {item.google_meet_link ? (
+        {item.google_meet_link ? (
+          <View style={styles.meta}>
             <Ionicons color={colors.secondary} name="videocam-outline" size={15} />
-          ) : null}
-        </View>
+            <AppText style={styles.metaText}>Google Meet available</AppText>
+          </View>
+        ) : null}
       </View>
       <Ionicons color={colors.outline} name="chevron-forward" size={19} />
     </Pressable>
@@ -287,6 +442,7 @@ function LectureRow({ item, onPress }) {
 
 function LectureDetailSheet({ item, onClose }) {
   const status = item?.display_status || item?.status;
+  const action = classActionState(item);
   return (
     <View style={styles.overlay}>
       <Pressable onPress={onClose} style={styles.overlayBg} />
@@ -303,7 +459,6 @@ function LectureDetailSheet({ item, onClose }) {
         </View>
         <ScrollView contentContainerStyle={styles.sheetContent}>
           <StatusChip tone={lectureTone(status)}>{readable(status)}</StatusChip>
-          <Detail icon="person-outline" label="Teacher" value={item?.teacher_name} />
           <Detail icon="school-outline" label="Student" value={item?.student_name} />
           <Detail
             icon="calendar-outline"
@@ -335,20 +490,41 @@ function LectureDetailSheet({ item, onClose }) {
           {item?.description ? (
             <Detail icon="document-text-outline" label="About" value={item.description} />
           ) : null}
-          {item?.google_meet_link ? (
+          {action.canWatchRecording ? (
+            <>
+              <View style={styles.meetRow}>
+                <Ionicons color={colors.secondary} name="play-circle-outline" size={18} />
+                <AppText style={styles.meetText}>A recording is available for this class.</AppText>
+              </View>
+              <PillButton
+                icon={<Ionicons color={colors.white} name="play-circle-outline" size={18} />}
+                onPress={() => Linking.openURL(item.recording_drive_url)}
+                style={styles.meetButton}
+              >
+                Watch Recording
+              </PillButton>
+            </>
+          ) : null}
+          {action.canJoin ? (
             <>
               <View style={styles.meetRow}>
                 <Ionicons color={colors.secondary} name="videocam-outline" size={18} />
-                <AppText style={styles.meetText}>Google Meet link is available for this scheduled class.</AppText>
+                <AppText style={styles.meetText}>This class has started. You can join now.</AppText>
               </View>
               <PillButton
                 icon={<Ionicons color={colors.white} name="videocam-outline" size={18} />}
                 onPress={() => Linking.openURL(item.google_meet_link)}
                 style={styles.meetButton}
               >
-                Open Google Meet
+                Join Class
               </PillButton>
             </>
+          ) : null}
+          {action.future ? (
+            <View style={styles.meetRow}>
+              <Ionicons color={colors.secondary} name="time-outline" size={18} />
+              <AppText style={styles.meetText}>This class has not started yet.</AppText>
+            </View>
           ) : null}
         </ScrollView>
       </View>
@@ -391,7 +567,13 @@ const styles = StyleSheet.create({
   calendarCard: { padding: space.xs, overflow: "hidden" },
   periods: { gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm },
   filters: { gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm },
-  subFilters: { gap: space.sm, paddingBottom: space.sm },
+  eventFilters: { gap: space.sm, paddingBottom: space.sm },
+  eventTypeRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
+  eventTypeOption: { flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.xs, paddingHorizontal: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  eventTypeOptionActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
+  eventTypeText: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: 10, textAlign: "center" },
+  eventTypeTextActive: { color: colors.white },
+  eventTypeCount: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 10 },
   chip: { paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
   chipActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
   chipText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
@@ -400,6 +582,14 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   count: { color: colors.outline, fontSize: 10 },
   lecture: { flexDirection: "row", alignItems: "center", marginBottom: space.sm, padding: space.md, borderRadius: radius.xl, backgroundColor: colors.surface },
+  eventRow: { flexDirection: "row", alignItems: "flex-start", gap: space.sm, marginBottom: space.sm },
+  eventIcon: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.goldPale },
+  eventBody: { flex: 1 },
+  eventDescription: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
+  eventAction: { height: 36, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.xs, alignSelf: "flex-start", marginTop: space.sm, paddingHorizontal: space.md, borderRadius: radius.full, backgroundColor: colors.primaryContainer },
+  eventActionText: { color: colors.white, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  eventNotice: { flexDirection: "row", alignItems: "center", gap: space.xs, marginTop: space.sm, padding: space.sm, borderRadius: radius.md, backgroundColor: colors.goldPale },
+  eventNoticeText: { flex: 1, color: colors.onSurfaceVariant, fontSize: 10 },
   pressed: { opacity: 0.72 },
   timeRail: { width: 60, alignItems: "center", alignSelf: "stretch" },
   time: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10 },
@@ -420,7 +610,7 @@ const styles = StyleSheet.create({
   overlayBg: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "72%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", alignItems: "flex-start", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetEyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1 },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },

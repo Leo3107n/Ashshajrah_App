@@ -1,6 +1,6 @@
 /**
  * Student landing dashboard. It combines the protected Student overview,
- * today's timetable, teacher notes, announcements, and personal notifications
+ * next class, dashboard metrics, and announcements
  * while keeping every action inside the Student route boundary.
  */
 import { Ionicons } from "@expo/vector-icons";
@@ -9,8 +9,10 @@ import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Linking,
+  Modal,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   View,
 } from "react-native";
@@ -71,16 +73,51 @@ function overdueFeeMessage(status) {
     : "Fee Deadline is missed. Your student portal is locked until payment is cleared.";
 }
 
+function pendingFeeMessage(status) {
+  if (!status?.deadline_pending || status?.overdue || status?.is_paid || status?.is_submitted) return "";
+  const dueLabel = dateLabel(status.due_date);
+  return dueLabel
+    ? `Fee Deadline is ${dueLabel}. Please submit payment before the due date.`
+    : "Fee voucher deadline is pending. Please submit payment before the due date.";
+}
+
+function planTone(value) {
+  const status = String(value || "").toLowerCase();
+  if (status === "active") return "success";
+  if (status === "upcoming") return "warning";
+  return "neutral";
+}
+
+function pickDashboardPlan(plans) {
+  const items = Array.isArray(plans) ? plans : [];
+  return (
+    items.find((item) => String(item.status).toLowerCase() === "active") ||
+    items.find((item) => String(item.status).toLowerCase() === "upcoming") ||
+    items[0] ||
+    null
+  );
+}
+
+function isOtherEducationalDocument(item) {
+  const type = String(item?.type || item?.document_type || "")
+    .toLowerCase()
+    .replace(/[_-]+/g, " ")
+    .trim();
+  return ["other", "other document", "other documents", "parent guide", "yearly plan"].includes(type);
+}
+
 export default function StudentHome() {
   const router = useRouter();
   const { isAuthenticating, logout, user } = useAuth();
   const [data, setData] = useState({
     stats: {},
+    classDocuments: [],
+    educationalDocuments: [],
     headlines: [],
     lectures: [],
-    notes: [],
-    notifications: [],
-    notificationSummary: {},
+    monthlyPlans: [],
+    monthlyPlanSummary: {},
+    otherDocuments: [],
     monthlyFee: null,
   });
   const [loading, setLoading] = useState(true);
@@ -97,22 +134,23 @@ export default function StudentHome() {
     setError("");
 
     try {
-      const [dashboard, calendar, timeline, notifications, monthlyFee] = await Promise.all([
+      const [dashboard, calendar, monthlyFee, monthlyPlans] = await Promise.all([
         api.student.dashboard(),
         api.student.calendarLectures({ range: "today" }),
-        api.student.timeline({ range: "all" }),
-        api.shared.notifications.list({ limit: 5 }),
         api.payment.monthlyFeeStatus(),
+        api.shared.monthlyPlans({ status: "all" }),
       ]);
 
       setData({
         stats: dashboard?.stats || {},
+        classDocuments: dashboard?.class_documents || [],
+        educationalDocuments: dashboard?.educational_documents || [],
         headlines: dashboard?.headlines || [],
         lectures: calendar?.items || [],
-        notes: timeline?.notes || [],
-        notifications: notifications?.items || [],
-        notificationSummary: notifications?.summary || {},
+        monthlyPlans: monthlyPlans?.items || [],
+        monthlyPlanSummary: monthlyPlans?.summary || {},
         monthlyFee,
+        otherDocuments: dashboard?.other_documents || [],
       });
     } catch (nextError) {
       setError(nextError?.message || "Unable to load your dashboard.");
@@ -137,10 +175,12 @@ export default function StudentHome() {
   );
   const lockMessage = overdueFeeMessage(data.monthlyFee);
   const isPortalLocked = Boolean(lockMessage);
+  const feeNoticeMessage = pendingFeeMessage(data.monthlyFee);
+  const dashboardPlan = useMemo(() => pickDashboardPlan(data.monthlyPlans), [data.monthlyPlans]);
 
   const tiles = [
     {
-      label: "Attendance",
+      label: "Overall Attendance",
       value: `${data.stats.attendance_percentage ?? 0}%`,
       icon: "checkmark-circle-outline",
       tone: "green",
@@ -166,13 +206,6 @@ export default function StudentHome() {
       icon: "wallet-outline",
       tone: "mint",
       section: "fees",
-    },
-    {
-      label: "Monthly Plan",
-      value: "Study Resources",
-      icon: "calendar-number-outline",
-      tone: "gold",
-      section: "monthly-plans",
     },
   ];
 
@@ -227,16 +260,6 @@ export default function StudentHome() {
               Deep roots, endless growth.
             </AppText>
           </View>
-          <Pressable
-            accessibilityLabel="Open notifications"
-            onPress={() => go("notifications")}
-            style={styles.bell}
-          >
-            <Ionicons color={colors.white} name="notifications-outline" size={21} />
-            {Number(data.notificationSummary.unread || 0) > 0 ? (
-              <View style={styles.unreadDot} />
-            ) : null}
-          </Pressable>
         </View>
       </LinearGradient>
 
@@ -268,8 +291,59 @@ export default function StudentHome() {
         </SurfaceCard>
       ) : null}
 
+      {!isPortalLocked && feeNoticeMessage ? (
+        <SurfaceCard style={styles.feeNoticeBanner}>
+          <View style={styles.feeNoticeIcon}>
+            <Ionicons color="#2563EB" name="calendar-outline" size={22} />
+          </View>
+          <View style={styles.lockCopy}>
+            <AppText style={styles.feeNoticeEyebrow}>FEE DEADLINE</AppText>
+            <AppText style={styles.feeNoticeText}>{feeNoticeMessage}</AppText>
+          </View>
+        </SurfaceCard>
+      ) : null}
+
       {isPortalLocked ? null : (
         <>
+
+      <SectionHeader title="Monthly Plan" />
+      <MonthlyPlanPreview
+        item={dashboardPlan}
+        onPress={() => go("monthly-plans")}
+        summary={data.monthlyPlanSummary}
+      />
+
+      <SectionHeader title="Announcements" />
+      <View style={styles.stack}>
+        {data.headlines.length ? (
+          data.headlines.slice(0, 3).map((item, index) => (
+            <View key={item.id || index} style={styles.announcement}>
+              <View style={styles.announcementIcon}>
+                <Ionicons color={colors.secondary} name="megaphone-outline" size={18} />
+              </View>
+              <View style={styles.announcementBody}>
+                <AppText style={styles.announcementTitle}>
+                  {item.headline || item.title || "Announcement"}
+                </AppText>
+                <AppText numberOfLines={3} style={styles.announcementText}>
+                  {item.message ||
+                    item.content ||
+                    item.description ||
+                    (item.end_date ? `Active until ${item.end_date}` : "")}
+                </AppText>
+              </View>
+            </View>
+          ))
+        ) : (
+          <EmptyRow icon="megaphone-outline" text="No active announcements." />
+        )}
+      </View>
+
+      <EducationalDocuments
+        classDocuments={data.classDocuments}
+        documents={data.educationalDocuments}
+        otherDocuments={data.otherDocuments}
+      />
 
       <Pressable onPress={() => go("lectures")}>
         <SurfaceCard style={styles.nextCard}>
@@ -282,9 +356,7 @@ export default function StudentHome() {
                   "No class scheduled"}
               </AppText>
               <AppText style={styles.teacher}>
-                {nextClass?.teacher_name
-                  ? `with ${nextClass.teacher_name}`
-                  : "Enjoy your open study time"}
+                {nextClass ? "Scheduled class" : "Enjoy your open study time"}
               </AppText>
             </View>
             <StatusChip tone="success">
@@ -333,142 +405,6 @@ export default function StudentHome() {
         ))}
       </View>
 
-      <SectionHeader onPress={() => go("calendar")} title="Today's Schedule" />
-      <View style={styles.list}>
-        {data.lectures.length ? (
-          data.lectures.slice(0, 4).map((lecture, index) => (
-            <Pressable
-              key={lecture.id || index}
-              onPress={() => go("calendar")}
-              style={[
-                styles.schedule,
-                String(lecture.display_status).toLowerCase() === "live"
-                  ? styles.scheduleActive
-                  : null,
-              ]}
-            >
-              <View style={[styles.dot, index % 2 ? styles.dotGold : null]} />
-              <View style={styles.scheduleText}>
-                <AppText style={styles.subject}>
-                  {lecture.subject_name || lecture.title}
-                </AppText>
-                <AppText style={styles.scheduleTime}>
-                  {time(lecture.scheduled_start)} - {time(lecture.scheduled_end)}
-                </AppText>
-              </View>
-              <Ionicons color={colors.outline} name="chevron-forward" size={18} />
-            </Pressable>
-          ))
-        ) : (
-          <EmptyRow
-            icon="calendar-outline"
-            text="No lectures scheduled for today."
-          />
-        )}
-      </View>
-
-      <SectionHeader onPress={() => go("notes")} title="Recent Notes" />
-      {data.notes.length ? (
-        data.notes
-          .slice(-2)
-          .reverse()
-          .map((note, index) => (
-            <Pressable
-              key={note.id || index}
-              onPress={() => go("notes")}
-              style={styles.note}
-            >
-              <View style={styles.noteAvatar}>
-                <AppText style={styles.noteInitial}>
-                  {String(note.teacher_name || "T")[0]}
-                </AppText>
-              </View>
-              <View style={styles.noteBody}>
-                <AppText style={styles.noteTeacher}>
-                  {note.teacher_name || "Teacher"}
-                </AppText>
-                <AppText numberOfLines={3} style={styles.noteText}>
-                  {`"${note.note}"`}
-                </AppText>
-              </View>
-            </Pressable>
-          ))
-      ) : (
-        <EmptyRow
-          icon="chatbubble-ellipses-outline"
-          text="No recent teacher notes."
-        />
-      )}
-
-      <SectionHeader title="Announcements" />
-      <View style={styles.stack}>
-        {data.headlines.length ? (
-          data.headlines.slice(0, 3).map((item, index) => (
-            <View key={item.id || index} style={styles.announcement}>
-              <View style={styles.announcementIcon}>
-                <Ionicons color={colors.secondary} name="megaphone-outline" size={18} />
-              </View>
-              <View style={styles.announcementBody}>
-                <AppText style={styles.announcementTitle}>
-                  {item.headline || item.title || "Announcement"}
-                </AppText>
-                <AppText numberOfLines={3} style={styles.announcementText}>
-                  {item.message ||
-                    item.content ||
-                    item.description ||
-                    (item.end_date ? `Active until ${item.end_date}` : "")}
-                </AppText>
-              </View>
-            </View>
-          ))
-        ) : (
-          <EmptyRow icon="megaphone-outline" text="No active announcements." />
-        )}
-      </View>
-
-      <SectionHeader
-        badge={data.notificationSummary.unread}
-        onPress={() => go("notifications")}
-        title="Notifications"
-      />
-      <View style={styles.stack}>
-        {data.notifications.length ? (
-          data.notifications.slice(0, 3).map((item) => (
-            <Pressable
-              key={item.id}
-              onPress={() => go("notifications")}
-              style={styles.notification}
-            >
-              <View
-                style={[
-                  styles.notificationIcon,
-                  !item.is_read && styles.notificationUnread,
-                ]}
-              >
-                <Ionicons
-                  color={colors.primary}
-                  name={item.is_read ? "notifications-outline" : "notifications"}
-                  size={18}
-                />
-              </View>
-              <View style={styles.notificationBody}>
-                <AppText numberOfLines={1} style={styles.notificationTitle}>
-                  {item.title || readable(item.type) || "Notification"}
-                </AppText>
-                <AppText numberOfLines={2} style={styles.notificationText}>
-                  {item.message}
-                </AppText>
-              </View>
-            </Pressable>
-          ))
-        ) : (
-          <EmptyRow
-            icon="notifications-outline"
-            text="You're all caught up."
-          />
-        )}
-      </View>
-
         </>
       )}
     </Screen>
@@ -500,6 +436,184 @@ function StatTile({ icon, label, onPress, tone, value }) {
         size={15}
         style={styles.tileArrow}
       />
+    </Pressable>
+  );
+}
+
+function EducationalDocuments({ classDocuments: classBucket, documents, otherDocuments: otherBucket }) {
+  const [documentGroup, setDocumentGroup] = useState("class");
+  const [selectorOpen, setSelectorOpen] = useState(false);
+  const items = Array.isArray(documents) ? documents.filter((item) => item?.url || item?.path) : [];
+  const fallbackClassDocuments = items.filter((item) => String(item?.class_level || "").trim());
+  const fallbackOtherDocuments = items.filter(isOtherEducationalDocument);
+  const classDocuments = (Array.isArray(classBucket) ? classBucket : [])
+    .filter((item) => item?.url || item?.path);
+  const otherDocuments = (Array.isArray(otherBucket) ? otherBucket : [])
+    .filter((item) => item?.url || item?.path);
+  const resolvedClassDocuments = classDocuments.length ? classDocuments : fallbackClassDocuments;
+  const resolvedOtherDocuments = otherDocuments.length ? otherDocuments : fallbackOtherDocuments;
+  const groups = [
+    { key: "class", label: "Class Documents", items: resolvedClassDocuments },
+    { key: "other", label: "Other Documents", items: resolvedOtherDocuments },
+  ];
+  const activeGroup = groups.find((group) => group.key === documentGroup);
+  const visibleItems = activeGroup?.items || [];
+
+  return (
+    <SurfaceCard style={styles.documents}>
+      <View style={styles.documentsHeader}>
+        <View style={styles.documentsTitleWrap}>
+          <Ionicons color={colors.secondary} name="document-text-outline" size={17} />
+          <AppText style={styles.documentsTitle}>Educational Documents</AppText>
+        </View>
+        <AppText style={styles.documentsCount}>{items.length}</AppText>
+      </View>
+
+      <Pressable onPress={() => setSelectorOpen(true)} style={styles.documentsDropdown}>
+        <View style={styles.documentsDropdownCopy}>
+          <AppText style={styles.documentsDropdownLabel}>DOCUMENT GROUP</AppText>
+          <AppText style={[styles.documentsDropdownValue, !activeGroup && styles.documentsDropdownPlaceholder]}>
+            {activeGroup?.label || "Select document type"}
+          </AppText>
+        </View>
+        <Ionicons color={colors.outline} name="chevron-down" size={18} />
+      </Pressable>
+
+      {visibleItems.length ? (
+        <View style={styles.documentList}>
+          {visibleItems.map((item) => (
+            <Pressable
+              disabled={!item.url}
+              key={item.key || item.label || item.path}
+              onPress={() => item.url && Linking.openURL(item.url)}
+              style={styles.documentRow}
+            >
+              <View style={styles.documentIcon}>
+                <Ionicons color={colors.secondary} name="document-attach-outline" size={16} />
+              </View>
+              <View style={styles.documentCopy}>
+                <AppText numberOfLines={1} style={styles.documentLabel}>
+                  {item.label || "Educational Document"}
+                </AppText>
+                {item.type ? (
+                  <AppText numberOfLines={1} style={styles.documentType}>
+                    {readable(item.type)}
+                  </AppText>
+                ) : null}
+              </View>
+              <Ionicons color={colors.outline} name="download-outline" size={15} />
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.noDocuments}>
+          <Ionicons color={colors.outline} name="folder-open-outline" size={17} />
+          <AppText style={styles.noDocumentsText}>No {(activeGroup?.label || "documents").toLowerCase()} available yet.</AppText>
+        </View>
+      )}
+
+      <Modal animationType="slide" onRequestClose={() => setSelectorOpen(false)} transparent visible={selectorOpen}>
+        <View style={styles.documentsModalBackdrop}>
+          <View style={styles.documentsSheet}>
+            <View style={styles.documentsSheetHandle} />
+            <View style={styles.documentsSheetHeader}>
+              <AppText style={styles.documentsSheetTitle}>Educational Documents</AppText>
+              <Pressable accessibilityLabel="Close document selector" onPress={() => setSelectorOpen(false)} style={styles.documentsCloseButton}>
+                <Ionicons color={colors.onSurfaceVariant} name="close" size={22} />
+              </Pressable>
+            </View>
+            <ScrollView contentContainerStyle={styles.documentsOptions} showsVerticalScrollIndicator={false}>
+              {groups.map((group) => {
+                const active = group.key === activeGroup?.key;
+                return (
+                  <Pressable
+                    key={group.key}
+                    onPress={() => {
+                      setDocumentGroup(group.key);
+                      setSelectorOpen(false);
+                    }}
+                    style={[styles.documentsOption, active && styles.documentsOptionActive]}
+                  >
+                    <View style={styles.documentsOptionCopy}>
+                      <AppText style={[styles.documentsOptionTitle, active && styles.documentsOptionTitleActive]}>
+                        {group.label}
+                      </AppText>
+                      <AppText style={[styles.documentsOptionMeta, active && styles.documentsOptionMetaActive]}>
+                        {group.items.length} document{group.items.length === 1 ? "" : "s"}
+                      </AppText>
+                    </View>
+                    <Ionicons
+                      color={active ? colors.white : colors.outline}
+                      name={active ? "checkmark-circle" : "ellipse-outline"}
+                      size={20}
+                    />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+    </SurfaceCard>
+  );
+}
+
+function MonthlyPlanPreview({ item, onPress, summary }) {
+  const mediaCount = Array.isArray(item?.media)
+    ? item.media.length
+    : Array.isArray(item?.image_urls)
+      ? item.image_urls.length
+      : 0;
+
+  if (!item) {
+    return (
+      <SurfaceCard style={styles.planPreview}>
+        <View style={styles.planPreviewTop}>
+          <View style={styles.planIcon}>
+            <Ionicons color={colors.secondary} name="calendar-number-outline" size={22} />
+          </View>
+          <View style={styles.planCopy}>
+            <AppText style={styles.planTitle}>No monthly plan yet</AppText>
+            <AppText style={styles.planDate}>
+              Plans uploaded by the academy will appear here.
+            </AppText>
+          </View>
+        </View>
+      </SurfaceCard>
+    );
+  }
+
+  return (
+    <Pressable onPress={onPress}>
+      <SurfaceCard style={styles.planPreview}>
+        <View style={styles.planPreviewTop}>
+          <View style={styles.planIcon}>
+            <Ionicons color={colors.secondary} name="calendar-number-outline" size={22} />
+          </View>
+          <View style={styles.planCopy}>
+            <AppText style={styles.planEyebrow}>STUDY MONTHLY PLAN</AppText>
+            <AppText style={styles.planTitle}>{item.name || "Monthly Plan"}</AppText>
+            <AppText style={styles.planDate}>
+              {dateLabel(item.start_date) || "Not set"} to {dateLabel(item.end_date) || "Not set"}
+            </AppText>
+          </View>
+          <StatusChip tone={planTone(item.status)}>{readable(item.status)}</StatusChip>
+        </View>
+        <View style={styles.planMetaRow}>
+          <View style={styles.planMeta}>
+            <Ionicons color={colors.primary} name="attach-outline" size={16} />
+            <AppText style={styles.planMetaText}>{mediaCount} resources</AppText>
+          </View>
+          <View style={styles.planMeta}>
+            <Ionicons color={colors.primary} name="albums-outline" size={16} />
+            <AppText style={styles.planMetaText}>{summary?.total || 0} total plans</AppText>
+          </View>
+        </View>
+        <View style={styles.planFooter}>
+          <AppText style={styles.planFooterText}>Tap to view images, videos, and all plans in the app</AppText>
+          <Ionicons color={colors.secondary} name="arrow-forward-outline" size={17} />
+        </View>
+      </SurfaceCard>
     </Pressable>
   );
 }
@@ -551,25 +665,6 @@ const styles = StyleSheet.create({
     lineHeight: 34,
   },
   heroBody: { marginTop: space.xs, color: "#D6E9E2", fontSize: fontSize.sm },
-  bell: {
-    width: 42,
-    height: 42,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 21,
-    backgroundColor: "rgba(255,255,255,0.12)",
-  },
-  unreadDot: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    width: 8,
-    height: 8,
-    borderWidth: 1.5,
-    borderColor: colors.primaryContainer,
-    borderRadius: 4,
-    backgroundColor: colors.gold,
-  },
   lockBanner: {
     flexDirection: "row",
     marginTop: space.md,
@@ -606,6 +701,34 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   lockButton: { marginTop: space.md },
+  feeNoticeBanner: {
+    flexDirection: "row",
+    marginTop: space.md,
+    borderWidth: 1,
+    borderColor: "#2563EB",
+    backgroundColor: "#DBEAFE",
+  },
+  feeNoticeIcon: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 22,
+    backgroundColor: colors.surface,
+  },
+  feeNoticeEyebrow: {
+    color: "#1D4ED8",
+    fontFamily: fonts.bodyBold,
+    fontSize: 10,
+    letterSpacing: 1.1,
+  },
+  feeNoticeText: {
+    marginTop: space.xs,
+    color: "#1E3A8A",
+    fontFamily: fonts.bodySemibold,
+    fontSize: fontSize.sm,
+    lineHeight: 20,
+  },
   nextCard: {
     marginTop: space.md,
     marginHorizontal: space.sm,
@@ -649,6 +772,18 @@ const styles = StyleSheet.create({
   },
   tileValue: { paddingRight: 16, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
   tileArrow: { position: "absolute", right: space.md, bottom: space.md },
+  planPreview: { gap: space.md },
+  planPreviewTop: { flexDirection: "row", alignItems: "center", gap: space.sm },
+  planIcon: { width: 46, height: 46, alignItems: "center", justifyContent: "center", borderRadius: 23, backgroundColor: colors.goldPale },
+  planCopy: { flex: 1 },
+  planEyebrow: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, letterSpacing: 1 },
+  planTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.base },
+  planDate: { marginTop: 2, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  planMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+  planMeta: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.surfaceLow },
+  planMetaText: { marginLeft: space.xs, color: colors.primary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  planFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.borderGreen },
+  planFooterText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -672,45 +807,6 @@ const styles = StyleSheet.create({
   viewAll: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10 },
   list: { gap: space.sm },
   stack: { gap: space.sm },
-  schedule: {
-    minHeight: 62,
-    flexDirection: "row",
-    alignItems: "center",
-    padding: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surface,
-  },
-  scheduleActive: { backgroundColor: colors.goldPale },
-  dot: {
-    width: 10,
-    height: 10,
-    marginRight: space.md,
-    borderRadius: 5,
-    backgroundColor: colors.emeraldLight,
-  },
-  dotGold: { backgroundColor: colors.gold },
-  scheduleText: { flex: 1 },
-  subject: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
-  scheduleTime: { color: colors.outline, fontSize: fontSize.xs },
-  note: {
-    flexDirection: "row",
-    marginBottom: space.sm,
-    padding: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceLow,
-  },
-  noteAvatar: {
-    width: 34,
-    height: 34,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 17,
-    backgroundColor: "#B9EEDB",
-  },
-  noteInitial: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  noteBody: { flex: 1, marginLeft: space.sm },
-  noteTeacher: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  noteText: { color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
   announcement: {
     flexDirection: "row",
     padding: space.md,
@@ -730,25 +826,38 @@ const styles = StyleSheet.create({
   announcementBody: { flex: 1, marginLeft: space.sm },
   announcementTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   announcementText: { marginTop: 2, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
-  notification: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: space.md,
-    borderRadius: radius.lg,
-    backgroundColor: colors.surfaceLow,
-  },
-  notificationIcon: {
-    width: 36,
-    height: 36,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-  },
-  notificationUnread: { backgroundColor: colors.goldPale },
-  notificationBody: { flex: 1, marginLeft: space.sm },
-  notificationTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  notificationText: { color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  documents: { marginTop: space.md, gap: space.sm, borderWidth: 1, borderColor: colors.borderGreen },
+  documentsHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  documentsTitleWrap: { flexDirection: "row", alignItems: "center", gap: space.xs },
+  documentsTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsCount: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsDropdown: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.md, paddingVertical: space.xs, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  documentsDropdownCopy: { flex: 1, marginRight: space.sm },
+  documentsDropdownLabel: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1 },
+  documentsDropdownValue: { marginTop: 1, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsDropdownPlaceholder: { color: colors.outline },
+  documentList: { gap: space.xs },
+  documentRow: { minHeight: 50, flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, paddingVertical: space.xs, borderRadius: radius.md, backgroundColor: colors.surface },
+  documentIcon: { width: 28, height: 28, alignItems: "center", justifyContent: "center", marginRight: space.sm, borderRadius: 14, backgroundColor: colors.goldPale },
+  documentCopy: { flex: 1 },
+  documentLabel: { color: colors.primary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  documentType: { marginTop: 2, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
+  noDocuments: { flexDirection: "row", alignItems: "center", paddingVertical: space.xs },
+  noDocumentsText: { flex: 1, marginLeft: space.xs, color: colors.outline, fontSize: 10 },
+  documentsModalBackdrop: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
+  documentsSheet: { maxHeight: "72%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
+  documentsSheetHandle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
+  documentsSheetHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  documentsSheetTitle: { flex: 1, color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
+  documentsCloseButton: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.surfaceLow },
+  documentsOptions: { padding: space.lg, gap: space.sm, paddingBottom: space["3xl"] },
+  documentsOption: { flexDirection: "row", alignItems: "center", padding: space.md, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.xl, backgroundColor: colors.surface },
+  documentsOptionActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
+  documentsOptionCopy: { flex: 1, marginRight: space.sm },
+  documentsOptionTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  documentsOptionTitleActive: { color: colors.white },
+  documentsOptionMeta: { marginTop: 2, color: colors.outline, fontSize: 10 },
+  documentsOptionMetaActive: { color: "#D6E9E2" },
   empty: {
     flexDirection: "row",
     alignItems: "center",

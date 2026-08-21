@@ -83,11 +83,25 @@ export default function StudentProfile() {
 
       <Section title="Academic Information">
         <SurfaceCard style={styles.card}>
-          <Row icon="school-outline" label="Enrolled Class" value={profile?.course_title || profile?.grade_level} /><Divider />
+          <Row icon="school-outline" label="Enrolled Class" value={profile?.course_title || profile?.grade_level || profile?.applied_class_level} /><Divider />
+          <Row icon="layers-outline" label="Applied Class" value={profile?.applied_class_level} /><Divider />
           <Row icon="id-card-outline" label="Admission Number" value={profile?.admission_no} /><Divider />
           <Row icon="calendar-outline" label="Date of Birth" value={readableDate(profile?.date_of_birth)} /><Divider />
           <Row icon="person-circle-outline" label="Age" value={profile?.age ? `${profile.age} years` : ""} /><Divider />
-          <Row icon="ribbon-outline" label="Program" value={profile?.program_name} />
+          <Row icon="ribbon-outline" label="Program" value={profile?.program_name} /><Divider />
+          <Row icon="calendar-number-outline" label="Preferred Start" value={profile?.preferred_starting_month_other || profile?.preferred_starting_month} />
+        </SurfaceCard>
+      </Section>
+
+      <Section title="Personal Information">
+        <SurfaceCard style={styles.card}>
+          <Row icon="person-outline" label="Student Name" value={profile?.lead_student_name || profile?.full_name} /><Divider />
+          <Row icon="male-female-outline" label="Gender" value={profile?.gender} /><Divider />
+          <Row icon="location-outline" label="City" value={profile?.city || profile?.city_country} /><Divider />
+          <Row icon="earth-outline" label="Country" value={profile?.country} /><Divider />
+          <Row icon="flag-outline" label="Nationality" value={profile?.nationality} /><Divider />
+          <Row icon="moon-outline" label="Religion" value={profile?.religion} /><Divider />
+          <Row icon="home-outline" label="Address" value={profile?.address} />
         </SurfaceCard>
       </Section>
 
@@ -95,8 +109,62 @@ export default function StudentProfile() {
         <SurfaceCard style={styles.card}>
           <Row icon="people-outline" label="Parent or Guardian" value={profile?.father_name || profile?.lead_parent_name} /><Divider />
           <Row icon="git-branch-outline" label="Relationship" value={profile?.lead_parent_relation} /><Divider />
-          <Row icon="call-outline" label="Guardian Phone" value={profile?.father_phone} /><Divider />
-          <Row icon="mail-outline" label="Guardian Email" value={profile?.father_email} />
+          <Row icon="call-outline" label="Guardian Phone" value={profile?.father_phone || profile?.lead_phone} /><Divider />
+          <Row icon="mail-outline" label="Guardian Email" value={profile?.father_email || profile?.lead_email || profile?.lead_father_email} /><Divider />
+          <Row icon="chatbubble-ellipses-outline" label="Preferred Contact" value={profile?.preferred_contact_person} />
+        </SurfaceCard>
+      </Section>
+
+      <Section title="Father Information">
+        <SurfaceCard style={styles.card}>
+          <Row icon="person-outline" label="Name" value={profile?.father_name_english || profile?.father_name} /><Divider />
+          <Row icon="card-outline" label="CNIC" value={profile?.father_cnic} /><Divider />
+          <Row icon="school-outline" label="Qualification" value={profile?.father_qualification} /><Divider />
+          <Row icon="briefcase-outline" label="Occupation" value={profile?.father_occupation} /><Divider />
+          <Row icon="language-outline" label="Mother Tongue" value={profile?.father_mother_tongue} /><Divider />
+          <Row icon="call-outline" label="Home Contact" value={profile?.father_contact_home} /><Divider />
+          <Row icon="logo-whatsapp" label="WhatsApp" value={profile?.father_contact_whatsapp} /><Divider />
+          <Row icon="alert-circle-outline" label="Emergency Contact" value={profile?.father_emergency_contact} /><Divider />
+          <Row icon="mail-outline" label="Email" value={profile?.lead_father_email || profile?.father_email} /><Divider />
+          <Row icon="home-outline" label="Residential Address" value={profile?.father_residential_address} />
+        </SurfaceCard>
+      </Section>
+
+      <Section title="Mother Information">
+        <SurfaceCard style={styles.card}>
+          <Row icon="person-outline" label="Name" value={profile?.mother_name_english} /><Divider />
+          <Row icon="card-outline" label="CNIC" value={profile?.mother_cnic} /><Divider />
+          <Row icon="school-outline" label="Qualification" value={profile?.mother_qualification} /><Divider />
+          <Row icon="briefcase-outline" label="Occupation" value={profile?.mother_occupation} /><Divider />
+          <Row icon="language-outline" label="Mother Tongue" value={profile?.mother_mother_tongue} /><Divider />
+          <Row icon="call-outline" label="Home Contact" value={profile?.mother_contact_home} /><Divider />
+          <Row icon="logo-whatsapp" label="WhatsApp" value={profile?.mother_contact_whatsapp} /><Divider />
+          <Row icon="alert-circle-outline" label="Emergency Contact" value={profile?.mother_emergency_contact} /><Divider />
+          <Row icon="mail-outline" label="Email" value={profile?.mother_email} /><Divider />
+          <Row icon="home-outline" label="Residential Address" value={profile?.mother_residential_address} />
+        </SurfaceCard>
+      </Section>
+
+      <Section title="Learning Profile">
+        <SurfaceCard style={styles.card}>
+          <Row icon="document-text-outline" label="Child Profile" value={profile?.child_profile} /><Divider />
+          <Row icon="star-outline" label="Strengths" value={profile?.child_strengths} /><Divider />
+          <Row icon="heart-outline" label="Support Needs" value={profile?.child_support_needs} /><Divider />
+          <Row icon="sparkles-outline" label="Special Interests" value={profile?.child_special_interests} /><Divider />
+          <Row icon="medical-outline" label="Medical Conditions" value={profile?.medical_conditions} /><Divider />
+          <Row icon="alert-outline" label="Developmental Concern" value={profile?.developmental_concern === true ? "Yes" : profile?.developmental_concern === false ? "No" : ""} /><Divider />
+          <Row icon="reader-outline" label="Concern Details" value={profile?.developmental_concern_details} /><Divider />
+          <Row icon="people-circle-outline" label="Support Person During Learning" value={profile?.support_person_during_learning} /><Divider />
+          <Row icon="tablet-landscape-outline" label="Device Available" value={profile?.device_available} />
+        </SurfaceCard>
+      </Section>
+
+      <Section title="Application Information">
+        <SurfaceCard style={styles.card}>
+          <Row icon="help-circle-outline" label="Applying For Other Child" value={profile?.applying_for_other} /><Divider />
+          <Row icon="bulb-outline" label="Interest Reason" value={profile?.interest_reason} /><Divider />
+          <Row icon="megaphone-outline" label="Heard About Us" value={[profile?.hear_about_source, profile?.hear_about_other].filter(Boolean).join(" - ")} /><Divider />
+          <Row icon="checkmark-done-outline" label="Declaration Accepted" value={profile?.declaration_accepted === true ? "Yes" : profile?.declaration_accepted === false ? "No" : ""} />
         </SurfaceCard>
       </Section>
 

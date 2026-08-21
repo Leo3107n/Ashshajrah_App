@@ -1,7 +1,7 @@
 /** Student calendar with marked lecture dates, subject filtering, and details. */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useState } from "react";
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
@@ -9,10 +9,21 @@ import { colors, fonts, fontSize, radius, space } from "../../theme";
 import StudentLectureSheet, { lectureDate, lectureTone, readable } from "./StudentLectureSheet";
 
 const PERIODS = [
-  ["selected_date", "Day"],
   ["selected_week", "Week"],
   ["selected_month", "Month"],
 ];
+
+function uniqueEvents(items) {
+  const seen = new Set();
+  const result = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    const key = String(item?.id || item?.raw_id || `${item?.type || "event"}-${item?.title || ""}-${item?.starts_at || ""}`);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    result.push(item);
+  }
+  return result;
+}
 
 function localDateKey(date = new Date()) {
   const year = date.getFullYear();
@@ -23,9 +34,12 @@ function localDateKey(date = new Date()) {
 
 export default function StudentCalendar() {
   const [selectedDate, setSelectedDate] = useState(localDateKey());
-  const [period, setPeriod] = useState("selected_date");
+  const [period, setPeriod] = useState("selected_week");
   const [subjectId, setSubjectId] = useState("");
   const [data, setData] = useState({ items: [], subjects: [], markedDates: [] });
+  const [internalEvents, setInternalEvents] = useState([]);
+  const [publicEvents, setPublicEvents] = useState([]);
+  const [eventType, setEventType] = useState("internal");
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,16 +49,30 @@ export default function StudentCalendar() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const response = await api.student.calendarLectures({
-        range: period,
-        date: selectedDate,
-        subjectId: subjectId || undefined,
-      });
+      const [response, internalEventResponse, publicEventResponse] = await Promise.all([
+        api.student.calendarLectures({
+          range: period,
+          date: selectedDate,
+          subjectId: subjectId || undefined,
+        }),
+        api.student.calendarEvents({
+          range: period,
+          date: selectedDate,
+          type: "internal",
+        }),
+        api.student.calendarEvents({
+          range: period,
+          date: selectedDate,
+          type: "public",
+        }),
+      ]);
       setData({
         items: response?.items || [],
         subjects: response?.subjects || [],
         markedDates: response?.markedDates || [],
       });
+      setInternalEvents(uniqueEvents(internalEventResponse?.items));
+      setPublicEvents(uniqueEvents(publicEventResponse?.items));
     } catch (nextError) {
       setError(nextError?.message || "Unable to load your calendar.");
     } finally {
@@ -119,7 +147,7 @@ export default function StudentCalendar() {
 
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Lectures</AppText>
-          <AppText style={styles.count}>{data.items.length} scheduled this {period === "selected_date" ? "day" : period === "selected_week" ? "week" : "month"}</AppText>
+          <AppText style={styles.count}>{data.items.length} scheduled this {period === "selected_week" ? "week" : "month"}</AppText>
         </View>
 
         {error ? (
@@ -139,10 +167,155 @@ export default function StudentCalendar() {
             <AppText style={styles.emptyText}>Select another marked date, week, or month to view its schedule.</AppText>
           </SurfaceCard>
         )}
+
+        <EventSection
+          activeType={eventType}
+          error={error}
+          internalEvents={internalEvents}
+          onChangeType={setEventType}
+          period={period}
+          publicEvents={publicEvents}
+        />
       </Screen>
       <StudentLectureSheet lecture={selectedLecture} onClose={() => setSelectedLecture(null)} />
     </>
   );
+}
+
+function EventSection({ activeType, error, internalEvents, onChangeType, period, publicEvents }) {
+  const options = [
+    ["internal", "Internal Events", internalEvents],
+    ["public", "Public Events", publicEvents],
+  ];
+  const activeOption = options.find(([type]) => type === activeType) || options[0];
+  const [type, title, events] = activeOption;
+
+  return (
+    <>
+      <View style={styles.sectionHeader}>
+        <AppText style={styles.sectionTitle}>Events</AppText>
+        <AppText style={styles.count}>{events.length} this {period === "selected_week" ? "week" : "month"}</AppText>
+      </View>
+
+      <View style={styles.eventTypeRow}>
+        {options.map(([optionType, optionLabel, optionEvents]) => (
+          <Pressable
+            key={optionType}
+            onPress={() => onChangeType(optionType)}
+            style={[styles.eventTypeOption, activeType === optionType && styles.eventTypeOptionActive]}
+          >
+            <AppText style={[styles.eventTypeText, activeType === optionType && styles.eventTypeTextActive]}>
+              {optionLabel}
+            </AppText>
+            <AppText style={[styles.eventTypeCount, activeType === optionType && styles.eventTypeTextActive]}>
+              {optionEvents.length}
+            </AppText>
+          </Pressable>
+        ))}
+      </View>
+
+      {error ? null : events.length ? (
+        events.map((item) => <EventCard item={item} key={item.id || item.raw_id || `${item.type}-${item.title}-${item.starts_at}`} />)
+      ) : (
+        <SurfaceCard style={styles.empty}>
+          <Ionicons color={colors.secondary} name="calendar-number-outline" size={30} />
+          <AppText style={styles.emptyTitle}>No {type} events</AppText>
+          <AppText style={styles.emptyText}>Select another week or month to view available events.</AppText>
+        </SurfaceCard>
+      )}
+    </>
+  );
+}
+
+function EventCard({ item }) {
+  const action = eventActionState(item);
+  return (
+    <SurfaceCard style={styles.eventCard}>
+      <View style={styles.eventIcon}>
+        <Ionicons
+          color={colors.secondary}
+          name={item.type === "internal" ? "people-outline" : "megaphone-outline"}
+          size={19}
+        />
+      </View>
+      <View style={styles.eventBody}>
+        <View style={styles.lectureTop}>
+          <AppText numberOfLines={1} style={styles.subject}>{item.title}</AppText>
+          <StatusChip tone={item.type === "internal" ? "warning" : "success"}>
+            {readableEvent(item.type)}
+          </StatusChip>
+        </View>
+        <AppText style={styles.metaText}>
+          {eventTime(item.starts_at)} - {eventTime(item.ends_at)}
+          {item.host_name ? ` · ${item.host_name}` : ""}
+        </AppText>
+        {item.description ? <AppText numberOfLines={2} style={styles.eventDescription}>{item.description}</AppText> : null}
+        {action.canJoin ? (
+          <EventActionButton
+            icon="videocam-outline"
+            onPress={() => Linking.openURL(item.meet_link)}
+          >
+            Join Event
+          </EventActionButton>
+        ) : null}
+        {action.canWatchRecording ? (
+          <EventActionButton
+            icon="play-circle-outline"
+            onPress={() => Linking.openURL(item.recording_drive_url)}
+          >
+            Watch Recording
+          </EventActionButton>
+        ) : null}
+        {action.future ? (
+          <View style={styles.eventNotice}>
+            <Ionicons color={colors.secondary} name="time-outline" size={15} />
+            <AppText style={styles.eventNoticeText}>This event has not started yet.</AppText>
+          </View>
+        ) : null}
+      </View>
+    </SurfaceCard>
+  );
+}
+
+function EventActionButton({ children, icon, onPress }) {
+  return (
+    <Pressable onPress={onPress} style={styles.eventAction}>
+      <Ionicons color={colors.white} name={icon} size={15} />
+      <AppText style={styles.eventActionText}>{children}</AppText>
+    </Pressable>
+  );
+}
+
+function startOfLocalDayTimestamp(value) {
+  if (!value) return 0;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 0;
+  date.setHours(0, 0, 0, 0);
+  return date.getTime();
+}
+
+function eventActionState(item) {
+  const now = Date.now();
+  const eventDateStart = startOfLocalDayTimestamp(item?.starts_at);
+  const end = item?.ends_at ? new Date(item.ends_at).getTime() : 0;
+  const future = Boolean(eventDateStart && now < eventDateStart);
+  const ended = Boolean(end && now > end);
+  const recordingAvailable = ended && Boolean(item?.recording_drive_url);
+
+  return {
+    future,
+    canJoin: !future && !recordingAvailable && Boolean(item?.meet_link),
+    canWatchRecording: recordingAvailable,
+  };
+}
+
+function eventTime(value) {
+  if (!value) return "--:--";
+  return new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function readableEvent(value) {
+  return String(value || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 export function LectureCard({ item, onPress }) {
@@ -159,11 +332,12 @@ export function LectureCard({ item, onPress }) {
           <StatusChip tone={lectureTone(status)}>{readable(status)}</StatusChip>
         </View>
         <AppText style={styles.lectureTitle}>{item.title}</AppText>
-        <View style={styles.meta}>
-          <Ionicons color={colors.outline} name="person-outline" size={14} />
-          <AppText style={styles.metaText}>{item.teacher_name || "Teacher"}</AppText>
-          {item.google_meet_link ? <Ionicons color={colors.secondary} name="videocam-outline" size={15} /> : null}
-        </View>
+        {item.google_meet_link ? (
+          <View style={styles.meta}>
+            <Ionicons color={colors.secondary} name="videocam-outline" size={15} />
+            <AppText style={styles.metaText}>Google Meet available</AppText>
+          </View>
+        ) : null}
       </View>
       <Ionicons color={colors.outline} name="chevron-forward" size={19} />
     </Pressable>
@@ -186,6 +360,13 @@ const styles = StyleSheet.create({
   calendarCard: { padding: space.xs, overflow: "hidden" },
   periods: { gap: space.sm, paddingTop: space.lg, paddingBottom: space.sm },
   filters: { gap: space.sm, paddingBottom: space.lg },
+  eventFilters: { gap: space.sm, paddingBottom: space.sm },
+  eventTypeRow: { flexDirection: "row", gap: space.sm, marginBottom: space.sm },
+  eventTypeOption: { flex: 1, minHeight: 42, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.xs, paddingHorizontal: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  eventTypeOptionActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
+  eventTypeText: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: 10, textAlign: "center" },
+  eventTypeTextActive: { color: colors.white },
+  eventTypeCount: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 10 },
   filter: { paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
   filterActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
   filterText: { color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
@@ -194,6 +375,14 @@ const styles = StyleSheet.create({
   sectionTitle: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   count: { color: colors.outline, fontSize: 10 },
   lecture: { flexDirection: "row", alignItems: "center", marginBottom: space.sm, padding: space.md, borderRadius: radius.xl, backgroundColor: colors.surface },
+  eventCard: { flexDirection: "row", alignItems: "flex-start", gap: space.sm, marginBottom: space.sm },
+  eventIcon: { width: 38, height: 38, alignItems: "center", justifyContent: "center", borderRadius: 19, backgroundColor: colors.goldPale },
+  eventBody: { flex: 1 },
+  eventDescription: { marginTop: space.xs, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },
+  eventAction: { height: 36, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: space.xs, alignSelf: "flex-start", marginTop: space.sm, paddingHorizontal: space.md, borderRadius: radius.full, backgroundColor: colors.primaryContainer },
+  eventActionText: { color: colors.white, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  eventNotice: { flexDirection: "row", alignItems: "center", gap: space.xs, marginTop: space.sm, padding: space.sm, borderRadius: radius.md, backgroundColor: colors.goldPale },
+  eventNoticeText: { flex: 1, color: colors.onSurfaceVariant, fontSize: 10 },
   pressed: { opacity: 0.72 },
   timeRail: { width: 66, alignItems: "center", alignSelf: "stretch" },
   time: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10 },

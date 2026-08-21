@@ -21,6 +21,7 @@ export async function GET(request) {
       SELECT
         tn.id::text AS id,
         tn.note,
+        COALESCE(tn.visibility, 'parent') AS visibility,
         tn.created_at,
         tu.full_name AS teacher_name,
         su.full_name AS student_name

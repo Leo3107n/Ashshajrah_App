@@ -5,11 +5,12 @@
  */
 import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
+import { Image, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 const FILTERS = [
@@ -50,9 +51,15 @@ function statusTone(item) {
   return "neutral";
 }
 
+function isImageAttachment(item) {
+  const name = normalized(item?.submission_attachment_name);
+  const url = normalized(item?.submission_attachment_url);
+  return /\.(png|jpe?g|webp|gif|heic|heif)(\?|$)/i.test(name) || /\.(png|jpe?g|webp|gif|heic|heif)(\?|$)/i.test(url);
+}
+
 export default function ParentHomework() {
   const [data, setData] = useState({ items: [], children: [] });
-  const [childId, setChildId] = useState("");
+  const [childId, setChildId] = useParentChildSelection(data.children);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -80,15 +87,6 @@ export default function ParentHomework() {
   useEffect(() => {
     setSelected(null);
   }, [childId, filter]);
-
-  useEffect(() => {
-    if (data.children.length === 1) {
-      setChildId(data.children[0]?.id || "");
-      return;
-    }
-    if (childId && data.children.some((child) => child.id === childId)) return;
-    setChildId("");
-  }, [childId, data.children]);
 
   const requiresChildSelection = data.children.length > 1 && !childId;
 
@@ -121,7 +119,7 @@ export default function ParentHomework() {
     <>
       <Screen
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
+        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
       >
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>YOUR CHILDREN</AppText>
@@ -194,6 +192,18 @@ function HomeworkCard({ item, onPress }) {
           <Ionicons color={overdue ? colors.error : colors.outline} name="calendar-outline" size={14} />
           <AppText style={[styles.dueText, overdue && styles.dueOverdue]}>Due {dateLabel(item.due_date)}</AppText>
         </View>
+        {item.submission_attachment_url ? (
+          <Pressable
+            onPress={() => Linking.openURL(item.submission_attachment_url)}
+            style={styles.uploadedFile}
+          >
+            <Ionicons color={colors.secondary} name="attach-outline" size={14} />
+            <AppText numberOfLines={1} style={styles.uploadedFileText}>
+              {item.submission_attachment_name || "Uploaded homework file"}
+            </AppText>
+            <Ionicons color={colors.secondary} name="open-outline" size={13} />
+          </Pressable>
+        ) : null}
       </View>
       <Ionicons color={colors.outline} name="chevron-forward" size={19} />
     </Pressable>
@@ -223,6 +233,27 @@ function HomeworkDetail({ item, onClose }) {
             <Detail icon="calendar-outline" label="Due" value={dateLabel(item?.due_date)} />
             {item?.description ? <Detail icon="document-text-outline" label="Assignment" value={item.description} /> : null}
             {item?.submission_note ? <Detail icon="chatbox-outline" label="Submission note" value={item.submission_note} /> : null}
+            {item?.submission_attachment_url ? (
+              <View style={styles.attachmentBlock}>
+                {isImageAttachment(item) ? (
+                  <Pressable onPress={() => Linking.openURL(item.submission_attachment_url)}>
+                    <Image
+                      resizeMode="cover"
+                      source={{ uri: item.submission_attachment_url }}
+                      style={styles.attachmentPreview}
+                    />
+                  </Pressable>
+                ) : null}
+                <PillButton
+                  icon={<Ionicons color={colors.secondary} name="download-outline" size={18} />}
+                  onPress={() => Linking.openURL(item.submission_attachment_url)}
+                  style={styles.attachmentButton}
+                  variant="outline"
+                >
+                  View / Download Uploaded File
+                </PillButton>
+              </View>
+            ) : null}
           </ScrollView>
         </View>
       </View>
@@ -281,10 +312,12 @@ const styles = StyleSheet.create({
   due: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: space.xs },
   dueText: { color: colors.outline, fontSize: 10 },
   dueOverdue: { color: colors.error, fontFamily: fonts.bodySemibold },
+  uploadedFile: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 4, marginTop: space.xs, maxWidth: "100%" },
+  uploadedFileText: { flex: 1, color: colors.secondary, fontFamily: fonts.bodySemibold, fontSize: 10 },
   overlay: { flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(2,35,28,0.48)" },
   sheet: { maxHeight: "80%", paddingTop: space.sm, borderTopLeftRadius: radius["2xl"], borderTopRightRadius: radius["2xl"], backgroundColor: colors.background },
   handle: { width: 42, height: 4, alignSelf: "center", borderRadius: 2, backgroundColor: colors.outlineVariant },
-  sheetHeader: { flexDirection: "row", alignItems: "flex-start", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
+  sheetHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", padding: space.lg, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
   sheetHeading: { flex: 1 },
   sheetContent: { padding: space.lg, paddingBottom: space["3xl"] },
   detail: { flexDirection: "row", paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: colors.borderGreen },
@@ -292,5 +325,8 @@ const styles = StyleSheet.create({
   detailCopy: { flex: 1, marginLeft: space.md },
   detailLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 9, textTransform: "uppercase" },
   detailValue: { marginTop: 3, color: colors.onSurface, fontSize: fontSize.xs, lineHeight: 18 },
+  attachmentBlock: { marginTop: space.lg },
+  attachmentPreview: { width: "100%", height: 220, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
+  attachmentButton: { marginTop: space.md },
 });
 

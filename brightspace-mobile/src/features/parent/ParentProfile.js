@@ -26,6 +26,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
+import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
 function initials(value) {
@@ -38,11 +39,18 @@ function initials(value) {
     .toUpperCase();
 }
 
+function readableDate(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return parsed.toLocaleDateString([], { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function ParentProfile() {
   const { isAuthenticating, logout, role } = useAuth();
   const [profile, setProfile] = useState(null);
   const [children, setChildren] = useState([]);
-  const [selectedChildId, setSelectedChildId] = useState("");
+  const [selectedChildId, setSelectedChildId] = useParentChildSelection(children);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -68,15 +76,6 @@ export default function ParentProfile() {
   useEffect(() => {
     load();
   }, [load]);
-
-  useEffect(() => {
-    if (children.length === 1) {
-      setSelectedChildId(children[0]?.id || "");
-      return;
-    }
-    if (selectedChildId && children.some((child) => child.id === selectedChildId)) return;
-    setSelectedChildId("");
-  }, [children, selectedChildId]);
 
   function confirmLogout() {
     Alert.alert(
@@ -116,7 +115,10 @@ export default function ParentProfile() {
       refreshControl={
         <RefreshControl
           colors={[colors.gold]}
-          onRefresh={() => load({ refresh: true })}
+          onRefresh={() => {
+            setSelectedChildId("");
+            if (!selectedChildId) load({ refresh: true });
+          }}
           refreshing={refreshing}
           tintColor={colors.gold}
         />
@@ -142,11 +144,15 @@ export default function ParentProfile() {
         </SurfaceCard>
       ) : null}
 
-      <Section title="Account Information">
+      <Section title="Personal Information">
         <SurfaceCard style={styles.card}>
+          <Row icon="person-outline" label="Full Name" value={profile?.full_name} />
+          <Divider />
           <Row icon="mail-outline" label="Email" value={profile?.email} />
           <Divider />
           <Row icon="call-outline" label="Phone" value={profile?.phone} />
+          <Divider />
+          <Row icon="git-branch-outline" label="Relation" value={profile?.relation} />
           <Divider />
           <Row
             icon="shield-checkmark-outline"
@@ -187,6 +193,31 @@ export default function ParentProfile() {
                           {child.course_title || child.class_level || "Enrolled"}
                         </AppText>
                       </View>
+                    </View>
+                    <View style={styles.childDetails}>
+                      <ProfileRow label="Student Name" value={child.full_name || child.name || child.lead_student_name} />
+                      <ProfileRow label="Username" value={child.username} />
+                      <ProfileRow label="Email" value={child.email} />
+                      <ProfileRow label="Phone" value={child.phone} />
+                      <ProfileRow label="Class" value={child.course_title || child.class_level || child.grade_level} />
+                      <ProfileRow label="Admission Status" value={child.status ? String(child.status).toUpperCase() : ""} />
+                      <ProfileRow label="Age" value={child.age ? `${child.age} years` : ""} />
+                      <ProfileRow label="Date of Birth" value={readableDate(child.date_of_birth)} />
+                      <ProfileRow label="Gender" value={child.gender} />
+                      <ProfileRow label="Program" value={child.program_name} />
+                      <ProfileRow label="City" value={child.city} />
+                      <ProfileRow label="Country" value={child.country} />
+                      <ProfileRow label="Nationality" value={child.nationality} />
+                      <ProfileRow label="Religion" value={child.religion} />
+                      <ProfileRow label="Child Profile" value={child.child_profile} />
+                      <ProfileRow label="Strengths" value={child.child_strengths} />
+                      <ProfileRow label="Support Needs" value={child.child_support_needs} />
+                      <ProfileRow label="Special Interests" value={child.child_special_interests} />
+                      <ProfileRow label="Developmental Concern" value={child.developmental_concern} />
+                      <ProfileRow label="Concern Details" value={child.developmental_concern_details} />
+                      <ProfileRow label="Medical Conditions" value={child.medical_conditions} />
+                      <ProfileRow label="Learning Support Person" value={child.support_person_during_learning} />
+                      <ProfileRow label="Device Available" value={child.device_available} />
                     </View>
                   </SurfaceCard>
                 ))
@@ -256,6 +287,15 @@ function Row({ icon, label, value }) {
   );
 }
 
+function ProfileRow({ label, value }) {
+  return (
+    <View style={styles.profileRow}>
+      <AppText style={styles.profileRowLabel}>{label}</AppText>
+      <AppText style={styles.profileRowValue}>{value || "Not provided"}</AppText>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   content: { paddingTop: space.md, paddingBottom: space.xl },
   hero: { alignItems: "center", padding: space.xl, borderRadius: radius["2xl"], ...shadows.hero },
@@ -279,6 +319,10 @@ const styles = StyleSheet.create({
   childCopy: { flex: 1, marginLeft: space.md },
   childName: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
   childClass: { color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  childDetails: { marginTop: space.md, paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.borderGreen },
+  profileRow: { paddingVertical: 7 },
+  profileRowLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 8, textTransform: "uppercase" },
+  profileRowValue: { marginTop: 2, color: colors.onSurface, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs, lineHeight: 18 },
   empty: { flexDirection: "row", alignItems: "center", gap: space.md, backgroundColor: colors.surfaceLow },
   emptyText: { flex: 1, color: colors.outline, fontSize: fontSize.xs },
   security: { flexDirection: "row", alignItems: "flex-start", marginTop: space.lg, backgroundColor: colors.surfaceLow },
