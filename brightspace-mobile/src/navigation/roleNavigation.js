@@ -53,7 +53,7 @@ const EXTRA_ROLE_SECTIONS = Object.freeze({
   superadmin: ["admissions", "admission-review", "communications", "reports", "audit", "profile", "career-applications"],
   // These Student workspaces are reached from dashboard cards and detail
   // links instead of consuming another slot in the five-item bottom bar.
-  student: ["lectures", "attendance", "progress", "notes", "notifications", "fees", "monthly-plans"],
+  student: ["lectures", "attendance", "progress", "notes", "fees", "monthly-plans"],
   // Teachers receive only their operational completion-report workspace.
   // Generic administrative reporting remains limited to Admin/Super Admin.
   // Homework approval already lives inside the "homework" tab's "To Review"

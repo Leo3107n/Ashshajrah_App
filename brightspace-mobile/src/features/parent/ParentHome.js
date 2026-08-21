@@ -119,6 +119,33 @@ function feeDeadlineBanner(children) {
   };
 }
 
+function latestFeeBanner(status) {
+  if (!status?.available || status?.is_paid) return null;
+  const dueLabel = dateLabel(status.due_date);
+  const childName = String(status.student_name || "").trim();
+  const childSuffix = childName ? ` for ${childName}` : "";
+
+  if (status.overdue) {
+    return {
+      tone: "overdue",
+      message: dueLabel
+        ? `Fee Deadline was ${dueLabel}${childSuffix}.`
+        : `Fee Deadline is missed${childSuffix}.`,
+    };
+  }
+
+  if (status.deadline_pending) {
+    return {
+      tone: "upcoming",
+      message: dueLabel
+        ? `Fee Deadline is ${dueLabel}${childSuffix}.`
+        : `Fee voucher deadline is pending${childSuffix}.`,
+    };
+  }
+
+  return null;
+}
+
 function dateLabel(value) {
   if (!value) return "Not set";
   const parsed = new Date(value);
@@ -151,6 +178,7 @@ export default function ParentHome() {
     headlines: [],
     monthlyPlans: [],
     monthlyPlanSummary: {},
+    monthlyFee: null,
     notifications: [],
     notificationSummary: {},
   });
@@ -164,8 +192,8 @@ export default function ParentHome() {
     return data.children.filter((child) => child.id === selectedChildId);
   }, [data.children, selectedChildId]);
   const deadlineBanner = useMemo(() => {
-    return feeDeadlineBanner(data.children);
-  }, [data.children]);
+    return latestFeeBanner(data.monthlyFee) || feeDeadlineBanner(data.children);
+  }, [data.children, data.monthlyFee]);
   const showChildPrompt = data.children.length > 1 && !selectedChildren.length;
   const dashboardPlan = useMemo(() => pickDashboardPlan(data.monthlyPlans), [data.monthlyPlans]);
   const visibleSelectedChildId = selectedChildId;
@@ -174,16 +202,18 @@ export default function ParentHome() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const [dashboard, notifications, monthlyPlans] = await Promise.all([
+      const [dashboard, notifications, monthlyPlans, monthlyFee] = await Promise.all([
         api.parent.dashboard(),
         api.shared.notifications.list({ limit: 5 }),
         api.shared.monthlyPlans({ status: "all" }),
+        api.payment.monthlyFeeStatus(),
       ]);
       setData({
         children: uniqueChildren(dashboard?.children),
         headlines: dashboard?.headlines || [],
         monthlyPlans: monthlyPlans?.items || [],
         monthlyPlanSummary: monthlyPlans?.summary || {},
+        monthlyFee,
         notifications: notifications?.items || [],
         notificationSummary: notifications?.summary || {},
       });
@@ -264,7 +294,6 @@ export default function ParentHome() {
       <MonthlyPlanPreview
         item={dashboardPlan}
         onPress={() => router.push("/(app)/parent/monthly-plans")}
-        summary={data.monthlyPlanSummary}
       />
 
       {/* Children cards */}
@@ -350,7 +379,7 @@ export default function ParentHome() {
             {data.headlines.slice(0, 3).map((item, index) => (
               <View key={item.id || index} style={styles.announcement}>
                 <View style={styles.announcementIcon}>
-                  <Ionicons color={colors.secondary} name="megaphone-outline" size={18} />
+                  <Ionicons color={colors.white} name="megaphone-outline" size={18} />
                 </View>
                 <View style={styles.announcementBody}>
                   <AppText style={styles.announcementTitle}>
@@ -537,7 +566,7 @@ function EducationalDocuments({ documents }) {
                   </AppText>
                 ) : null}
               </View>
-              <Ionicons color={colors.outline} name="download-outline" size={15} />
+              <Ionicons color={colors.gold} name="download-outline" size={15} />
             </Pressable>
           ))}
         </View>
@@ -627,7 +656,7 @@ function QuickAction({ icon, label, onPress }) {
   );
 }
 
-function MonthlyPlanPreview({ item, onPress, summary }) {
+function MonthlyPlanPreview({ item, onPress }) {
   const mediaCount = Array.isArray(item?.media)
     ? item.media.length
     : Array.isArray(item?.image_urls)
@@ -672,10 +701,6 @@ function MonthlyPlanPreview({ item, onPress, summary }) {
           <View style={styles.planMeta}>
             <Ionicons color={colors.primary} name="attach-outline" size={16} />
             <AppText style={styles.planMetaText}>{mediaCount} resources</AppText>
-          </View>
-          <View style={styles.planMeta}>
-            <Ionicons color={colors.primary} name="albums-outline" size={16} />
-            <AppText style={styles.planMetaText}>{summary?.total || 0} total plans</AppText>
           </View>
         </View>
         <View style={styles.planFooter}>
@@ -724,7 +749,7 @@ const styles = StyleSheet.create({
   documentsTitleWrap: { flexDirection: "row", alignItems: "center", gap: space.xs },
   documentsTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   documentsCount: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  documentsDropdown: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.sm, paddingHorizontal: space.md, paddingVertical: space.xs, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  documentsDropdown: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: space.sm, paddingHorizontal: space.md, paddingVertical: space.xs, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.full, backgroundColor: colors.goldPale },
   documentsDropdownCopy: { flex: 1, marginRight: space.sm },
   documentsDropdownLabel: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1 },
   documentsDropdownValue: { marginTop: 1, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
@@ -774,8 +799,8 @@ const styles = StyleSheet.create({
   planFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.borderGreen },
   planFooterText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   stack: { gap: space.sm },
-  announcement: { flexDirection: "row", padding: space.md, borderWidth: 1, borderColor: colors.borderGreen, borderRadius: radius.lg, backgroundColor: colors.surface },
-  announcementIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: colors.goldPale },
+  announcement: { flexDirection: "row", padding: space.md, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  announcementIcon: { width: 36, height: 36, alignItems: "center", justifyContent: "center", borderRadius: 18, backgroundColor: colors.gold },
   announcementBody: { flex: 1, marginLeft: space.sm },
   announcementTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   announcementText: { marginTop: 2, color: colors.onSurfaceVariant, fontSize: fontSize.xs, lineHeight: 18 },

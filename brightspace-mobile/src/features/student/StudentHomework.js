@@ -105,6 +105,8 @@ function isImageAttachment(item) {
 
 export default function StudentHomework() {
   const [items, setItems] = useState([]);
+  const [subject, setSubject] = useState("");
+  const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
   const [filter, setFilter] = useState("all");
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -129,24 +131,52 @@ export default function StudentHomework() {
     load();
   }, [load]);
 
+  const subjects = useMemo(() => {
+    const byKey = new Map();
+    items.forEach((item) => {
+      const label = item.subject_name || "General";
+      const key = normalized(label) || "general";
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          key,
+          label,
+          count: 0,
+        });
+      }
+      byKey.get(key).count += 1;
+    });
+    return Array.from(byKey.values()).sort((left, right) =>
+      left.label.localeCompare(right.label)
+    );
+  }, [items]);
+
+  const subjectItems = useMemo(
+    () =>
+      subject
+        ? items.filter((item) => (normalized(item.subject_name) || "general") === subject)
+        : items,
+    [items, subject]
+  );
+
   const summary = useMemo(
     () => ({
-      total: items.length,
-      pending: items.filter((item) => normalized(item.status) === "pending").length,
-      submitted: items.filter((item) => normalized(item.status) === "submitted").length,
-      overdue: items.filter(isOverdue).length,
+      total: subjectItems.length,
+      pending: subjectItems.filter((item) => normalized(item.status) === "pending").length,
+      submitted: subjectItems.filter((item) => normalized(item.status) === "submitted").length,
+      overdue: subjectItems.filter(isOverdue).length,
     }),
-    [items]
+    [subjectItems]
   );
 
   const visible = useMemo(
     () =>
-      items.filter((item) => {
+      subjectItems.filter((item) => {
+        if (!subject) return false;
         if (filter === "overdue") return isOverdue(item);
         if (filter === "all") return true;
         return normalized(item.status) === filter;
       }),
-    [filter, items]
+    [filter, subject, subjectItems]
   );
 
   if (loading) {
@@ -180,22 +210,50 @@ export default function StudentHomework() {
           <Summary label="Submitted" value={summary.submitted} />
           <Summary label="Overdue" value={summary.overdue} danger />
         </View>
+        <AppText style={styles.analyticsHint}>
+          {subject
+            ? `Showing analytics for ${subjects.find((item) => item.key === subject)?.label || "selected subject"}.`
+            : "Overall homework analytics. Select a subject to view homework."}
+        </AppText>
 
-        <ScrollView
-          contentContainerStyle={styles.filters}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-        >
-          {FILTERS.map(([value, label]) => (
-            <Filter
-              active={filter === value}
-              count={summary[value] ?? summary.total}
-              key={value}
-              label={label}
-              onPress={() => setFilter(value)}
-            />
-          ))}
-        </ScrollView>
+        <View style={styles.subjectSection}>
+          <View style={styles.subjectHeader}>
+            <AppText style={styles.subjectHeading}>Select Subject</AppText>
+            {subject ? (
+              <Pressable
+                accessibilityLabel="Clear selected subject"
+                onPress={() => {
+                  setSubject("");
+                  setFilter("all");
+                }}
+              >
+                <AppText style={styles.clearSubject}>Clear</AppText>
+              </Pressable>
+            ) : null}
+          </View>
+          <SubjectDropdown
+            onOpen={() => setSubjectPickerOpen(true)}
+            selected={subjects.find((item) => item.key === subject)}
+          />
+        </View>
+
+        {subject ? (
+          <ScrollView
+            contentContainerStyle={styles.filters}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+          >
+            {FILTERS.map(([value, label]) => (
+              <Filter
+                active={filter === value}
+                count={summary[value] ?? summary.total}
+                key={value}
+                label={label}
+                onPress={() => setFilter(value)}
+              />
+            ))}
+          </ScrollView>
+        ) : null}
 
         {error ? (
           <SurfaceCard style={styles.state}>
@@ -204,6 +262,14 @@ export default function StudentHomework() {
             <PillButton onPress={() => load()} style={styles.retry}>
               Try Again
             </PillButton>
+          </SurfaceCard>
+        ) : !subject ? (
+          <SurfaceCard style={styles.state}>
+            <Ionicons color={colors.secondary} name="book-outline" size={31} />
+            <AppText style={styles.stateTitle}>Select a subject</AppText>
+            <AppText style={styles.stateText}>
+              Choose a subject above to view its homework and subject analytics.
+            </AppText>
           </SurfaceCard>
         ) : visible.length ? (
           visible.map((item) => (
@@ -231,6 +297,17 @@ export default function StudentHomework() {
           setSelected(null);
           await load({ refresh: true });
         }}
+      />
+      <SubjectPicker
+        items={subjects}
+        onClose={() => setSubjectPickerOpen(false)}
+        onSelect={(item) => {
+          setSubject(item.key);
+          setFilter("all");
+          setSubjectPickerOpen(false);
+        }}
+        selectedKey={subject}
+        visible={subjectPickerOpen}
       />
     </>
   );
@@ -594,6 +671,70 @@ function Filter({ active, count, label, onPress }) {
   );
 }
 
+function SubjectDropdown({ onOpen, selected }) {
+  return (
+    <Pressable onPress={onOpen} style={styles.subjectDropdown}>
+      <View style={styles.subjectDropdownCopy}>
+        <AppText style={styles.subjectDropdownLabel}>Subject</AppText>
+        <AppText numberOfLines={1} style={[styles.subjectDropdownValue, !selected && styles.subjectDropdownPlaceholder]}>
+          {selected ? `${selected.label} (${selected.count})` : "Choose a subject to view homework"}
+        </AppText>
+      </View>
+      <Ionicons color={colors.outline} name="chevron-down-outline" size={22} />
+    </Pressable>
+  );
+}
+
+function SubjectPicker({ items, onClose, onSelect, selectedKey, visible }) {
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} transparent visible={visible}>
+      <View style={styles.pickerOverlay}>
+        <Pressable onPress={onClose} style={styles.pickerBackdrop} />
+        <SurfaceCard style={styles.pickerCard}>
+          <View style={styles.pickerHeader}>
+            <View>
+              <AppText style={styles.eyebrow}>HOMEWORK FILTER</AppText>
+              <AppText variant="heading">Select Subject</AppText>
+            </View>
+            <Pressable accessibilityLabel="Close subject selector" onPress={onClose}>
+              <Ionicons color={colors.onSurfaceVariant} name="close" size={24} />
+            </Pressable>
+          </View>
+          <ScrollView contentContainerStyle={styles.pickerList}>
+            {items.length ? (
+              items.map((item) => {
+                const active = selectedKey === item.key;
+                return (
+                  <Pressable
+                    key={item.key}
+                    onPress={() => onSelect(item)}
+                    style={[styles.pickerOption, active && styles.pickerOptionActive]}
+                  >
+                    <View style={styles.pickerOptionCopy}>
+                      <AppText style={[styles.pickerOptionText, active && styles.pickerOptionTextActive]}>
+                        {item.label}
+                      </AppText>
+                      <AppText style={[styles.pickerOptionCount, active && styles.pickerOptionTextActive]}>
+                        {item.count} homework
+                      </AppText>
+                    </View>
+                    {active ? <Ionicons color={colors.white} name="checkmark-circle" size={20} /> : null}
+                  </Pressable>
+                );
+              })
+            ) : (
+              <View style={styles.pickerEmpty}>
+                <Ionicons color={colors.outline} name="book-outline" size={28} />
+                <AppText style={styles.stateText}>No subjects are available yet.</AppText>
+              </View>
+            )}
+          </ScrollView>
+        </SurfaceCard>
+      </View>
+    </Modal>
+  );
+}
+
 function Meta({ icon, label, value }) {
   return (
     <View style={styles.meta}>
@@ -625,6 +766,38 @@ const styles = StyleSheet.create({
   summaryValue: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   summaryDanger: { color: colors.error },
   summaryLabel: { color: colors.outline, fontFamily: fonts.bodySemibold, fontSize: 8, textTransform: "uppercase" },
+  analyticsHint: { marginTop: -space.xs, marginBottom: space.md, color: colors.onSurfaceVariant, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  subjectSection: { marginBottom: space.sm },
+  subjectHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: space.xs },
+  subjectHeading: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs, textTransform: "uppercase", letterSpacing: 1 },
+  clearSubject: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  subjectDropdown: {
+    minHeight: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: space.md,
+    paddingVertical: space.sm,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+    borderRadius: radius.xl,
+    backgroundColor: colors.surface,
+  },
+  subjectDropdownCopy: { flex: 1 },
+  subjectDropdownLabel: { color: colors.outline, fontFamily: fonts.bodyBold, fontSize: 8, textTransform: "uppercase" },
+  subjectDropdownValue: { marginTop: 3, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
+  subjectDropdownPlaceholder: { color: colors.outline },
+  pickerOverlay: { flex: 1, justifyContent: "center", padding: space.lg, backgroundColor: "rgba(2,35,28,0.45)" },
+  pickerBackdrop: { ...StyleSheet.absoluteFillObject },
+  pickerCard: { maxHeight: "72%", padding: space.lg },
+  pickerHeader: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: space.md },
+  pickerList: { gap: space.sm },
+  pickerOption: { minHeight: 54, flexDirection: "row", alignItems: "center", paddingHorizontal: space.md, paddingVertical: space.sm, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.xl, backgroundColor: colors.surfaceLow },
+  pickerOptionActive: { borderColor: colors.primaryContainer, backgroundColor: colors.primaryContainer },
+  pickerOptionCopy: { flex: 1 },
+  pickerOptionText: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.sm },
+  pickerOptionCount: { marginTop: 2, color: colors.outline, fontSize: 9 },
+  pickerOptionTextActive: { color: colors.white },
+  pickerEmpty: { alignItems: "center", paddingVertical: space.xl },
   filters: { gap: space.sm, paddingVertical: space.sm, marginBottom: space.md },
   filter: {
     width: 108,

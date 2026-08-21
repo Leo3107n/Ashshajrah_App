@@ -8,6 +8,7 @@ import { Calendar } from "react-native-calendars";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Linking, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
@@ -83,7 +84,7 @@ export default function TeacherLectures() {
       <AppText variant="display">Lectures</AppText><AppText style={styles.subtitle}>Your schedule, classroom links, recordings, and lecture status.</AppText>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.rail} contentContainerStyle={styles.filters}>{RANGES.map(([value,label])=><Chip active={range===value} key={value} label={label} onPress={()=>{setRange(value);setShowCalendar(false);}}/>)}<Chip active={range==="selected_date"} icon="calendar-outline" label="Date" onPress={()=>setShowCalendar((current)=>!current)}/></ScrollView>
       {showCalendar?<SurfaceCard style={styles.calendarCard}><Calendar markedDates={marked} onDayPress={chooseDate} theme={{calendarBackground:colors.surface,dayTextColor:colors.onSurface,textDisabledColor:colors.outlineVariant,monthTextColor:colors.primary,arrowColor:colors.secondary,todayTextColor:colors.emeraldMid,textMonthFontFamily:fonts.displayBold,textDayFontFamily:fonts.body}}/></SurfaceCard>:null}
-      {(data.subjects||[]).length>1?<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subRail} contentContainerStyle={styles.filters}><Chip active={!subjectId} label="All Subjects" onPress={()=>setSubjectId("")}/>{data.subjects.map((item)=><Chip active={subjectId===item.id} key={item.id} label={item.name} onPress={()=>setSubjectId(item.id)}/>)}</ScrollView>:null}
+      {(data.subjects||[]).length>1?<SubjectDropdown onChange={setSubjectId} options={data.subjects} selectedId={subjectId}/>:null}
       {(data.classes||[]).length>1?<ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.subRail} contentContainerStyle={styles.filters}><Chip active={!classLevel} label="All Classes" onPress={()=>setClassLevel("")}/>{data.classes.map((item,index)=>{const value=item.class_level||item.course_title;return <Chip active={classLevel===value} key={`${value}-${index}`} label={value||"Unassigned"} onPress={()=>setClassLevel(value)}/>;})}</ScrollView>:null}
       {error?<SurfaceCard style={styles.warning}><AppText style={styles.warningText}>{error}</AppText></SurfaceCard>:null}
       <View style={styles.summary}><View><AppText style={styles.summaryValue}>{data.items?.length||0}</AppText><AppText style={styles.summaryLabel}>LECTURES IN VIEW</AppText></View><Ionicons color={colors.gold} name="calendar-outline" size={28}/></View>

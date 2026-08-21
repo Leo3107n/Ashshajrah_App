@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
@@ -90,7 +91,7 @@ export default function TeacherClasses() {
     <AppText style={styles.subtitle}>Your assigned classes, subjects, students, and lecture activity.</AppText>
     <View style={styles.summary}><Summary icon="school-outline" label="Assignments" value={groups.length}/><Summary icon="people-outline" label="Students" value={uniqueStudents}/><Summary icon="book-outline" label="Subjects" value={subjects.length}/></View>
     <View style={styles.search}><Ionicons color={colors.outline} name="search-outline" size={20}/><TextInput onChangeText={setSearch} placeholder="Search class, subject, or student..." placeholderTextColor={colors.outline} style={styles.input} value={search}/>{search ? <Pressable onPress={()=>setSearch("")}><Ionicons color={colors.outline} name="close-circle" size={19}/></Pressable>:null}</View>
-    {subjects.length > 1 ? <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterRail} contentContainerStyle={styles.filters}><Chip active={!subject} label="All Subjects" onPress={()=>setSubject("")}/>{subjects.map((item)=><Chip active={subject===item} key={item} label={item} onPress={()=>setSubject(item)}/>)}</ScrollView>:null}
+    {subjects.length > 1 ? <SubjectDropdown onChange={setSubject} options={subjects.map((item)=>({ id:item, name:item }))} selectedId={subject}/>:null}
     {error ? <SurfaceCard style={styles.warning}><AppText style={styles.warningText}>{error}</AppText></SurfaceCard>:null}
     <View style={styles.list}>{filtered.length ? filtered.map((group)=><ClassCard group={group} key={group.id} onPress={()=>setSelected(group)}/>) : <View style={styles.empty}><Ionicons color={colors.outline} name="school-outline" size={30}/><AppText style={styles.emptyTitle}>No assignments found</AppText><AppText style={styles.emptyBody}>{groups.length ? "Try changing the search or subject filter." : "Class assignments will appear when lectures are scheduled for you."}</AppText></View>}</View>
     <ClassDetail group={selected} onClose={()=>setSelected(null)}/>

@@ -146,7 +146,8 @@ export async function GET() {
           COALESCE(
             (
               SELECT CASE
-                WHEN latest_fee_submission_status = 'verified' THEN 'Paid / Verified'
+                WHEN latest_fee_submission_status IN ('verified', 'approved', 'paid') THEN 'Paid / Verified'
+                WHEN latest_voucher_status IN ('verified', 'approved', 'paid') THEN 'Paid / Verified'
                 WHEN latest_fee_submission_status = 'pending' THEN 'Payment Submitted / Pending Verification'
                 WHEN latest_fee_submission_status = 'rejected' THEN 'Payment Rejected'
                 WHEN latest_voucher_status IS NOT NULL THEN 'Voucher Created / Unpaid'
@@ -160,6 +161,11 @@ export async function GET() {
                     INNER JOIN fee_vouchers fv ON fv.id = fs.voucher_id
                     WHERE (
                       fv.student_id = ${student.id}::uuid
+                      OR fv.id IN (
+                        SELECT monthly_item.voucher_id
+                        FROM regular_monthly_fee_voucher_items monthly_item
+                        WHERE monthly_item.student_id = ${student.id}::uuid
+                      )
                       OR fv.registration_id IN (
                         SELECT e2.registration_id
                         FROM enrollments e2
@@ -175,6 +181,11 @@ export async function GET() {
                     FROM fee_vouchers fv
                     WHERE (
                       fv.student_id = ${student.id}::uuid
+                      OR fv.id IN (
+                        SELECT monthly_item.voucher_id
+                        FROM regular_monthly_fee_voucher_items monthly_item
+                        WHERE monthly_item.student_id = ${student.id}::uuid
+                      )
                       OR fv.registration_id IN (
                         SELECT e2.registration_id
                         FROM enrollments e2
@@ -200,6 +211,11 @@ export async function GET() {
                     INNER JOIN fee_vouchers fv ON fv.id = fs.voucher_id
                     WHERE (
                       fv.student_id = ${student.id}::uuid
+                      OR fv.id IN (
+                        SELECT monthly_item.voucher_id
+                        FROM regular_monthly_fee_voucher_items monthly_item
+                        WHERE monthly_item.student_id = ${student.id}::uuid
+                      )
                       OR fv.registration_id IN (
                         SELECT e2.registration_id
                         FROM enrollments e2

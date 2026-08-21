@@ -11,27 +11,70 @@ export async function GET() {
   try {
     const session = await requireRole(["student"]);
     const items = await prisma.$queryRaw`
+      WITH student_scope AS (
+        SELECT sp.id AS student_id
+        FROM student_profiles sp
+        WHERE sp.user_id = ${session.user.id}::uuid
+      ),
+      student_vouchers AS (
+        SELECT
+          fv.id,
+          fv.voucher_no,
+          fv.amount,
+          fv.due_date,
+          fv.status,
+          fv.created_at,
+          CASE WHEN monthly_item.id IS NULL THEN false ELSE true END AS is_monthly_voucher
+        FROM fee_vouchers fv
+        INNER JOIN student_scope scope ON (
+          scope.student_id = fv.student_id
+          OR scope.student_id IN (
+            SELECT e.student_id
+            FROM enrollments e
+            WHERE e.registration_id = fv.registration_id
+          )
+        )
+        LEFT JOIN regular_monthly_fee_voucher_items monthly_item ON monthly_item.voucher_id = fv.id
+
+        UNION ALL
+
+        SELECT
+          fv.id,
+          fv.voucher_no,
+          fv.amount,
+          fv.due_date,
+          fv.status,
+          fv.created_at,
+          true AS is_monthly_voucher
+        FROM regular_monthly_fee_voucher_items monthly_item
+        INNER JOIN student_scope scope ON scope.student_id = monthly_item.student_id
+        INNER JOIN fee_vouchers fv ON fv.id = monthly_item.voucher_id
+      ),
+      deduped_vouchers AS (
+        SELECT DISTINCT ON (student_vouchers.id)
+          student_vouchers.id,
+          student_vouchers.voucher_no,
+          student_vouchers.amount,
+          student_vouchers.due_date,
+          student_vouchers.status,
+          student_vouchers.created_at,
+          student_vouchers.is_monthly_voucher
+        FROM student_vouchers
+        ORDER BY student_vouchers.id, student_vouchers.is_monthly_voucher DESC, student_vouchers.created_at DESC NULLS LAST
+      )
       SELECT
         fv.id::text AS id,
         fv.voucher_no,
         fv.amount::text AS amount,
         fv.due_date,
         fv.status::text AS status,
-        CASE WHEN monthly_item.id IS NULL THEN false ELSE true END AS is_monthly_voucher,
+        fv.is_monthly_voucher,
         fs.status::text AS submission_status,
         fs.paid_amount::text AS paid_amount,
         fs.paid_at,
         fs.transaction_id,
         fs.proof_file_path
-      FROM fee_vouchers fv
-      INNER JOIN student_profiles sp ON (
-        sp.id = fv.student_id
-        OR sp.id IN (
-          SELECT e.student_id
-          FROM enrollments e
-          WHERE e.registration_id = fv.registration_id
-        )
-      )
+      FROM deduped_vouchers fv
       LEFT JOIN LATERAL (
         SELECT fs.status, fs.paid_amount, fs.paid_at, fs.transaction_id, fs.proof_file_path
         FROM fee_submissions fs
@@ -39,8 +82,6 @@ export async function GET() {
         ORDER BY fs.created_at DESC
         LIMIT 1
       ) fs ON TRUE
-      LEFT JOIN regular_monthly_fee_voucher_items monthly_item ON monthly_item.voucher_id = fv.id
-      WHERE sp.user_id = ${session.user.id}::uuid
       ORDER BY fv.created_at DESC
     `;
 

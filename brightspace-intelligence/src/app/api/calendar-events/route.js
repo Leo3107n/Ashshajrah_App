@@ -24,7 +24,11 @@ function rangeBounds(range, dateValue) {
   const start = new Date(anchor);
   const end = new Date(anchor);
 
-  if (range === "selected_month") {
+  if (range === "selected_date") {
+    start.setHours(0, 0, 0, 0);
+    end.setTime(start.getTime());
+    end.setDate(start.getDate() + 1);
+  } else if (range === "selected_month") {
     start.setDate(1);
     start.setHours(0, 0, 0, 0);
     end.setMonth(start.getMonth() + 1, 1);
@@ -82,7 +86,10 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const type = clean(searchParams.get("type")).toLowerCase() === "internal" ? "internal" : "public";
-  const range = clean(searchParams.get("range")) === "selected_month" ? "selected_month" : "selected_week";
+  const requestedRange = clean(searchParams.get("range"));
+  const range = ["selected_date", "selected_week", "selected_month"].includes(requestedRange)
+    ? requestedRange
+    : "selected_week";
   const { start, end } = rangeBounds(range, searchParams.get("date"));
 
   try {

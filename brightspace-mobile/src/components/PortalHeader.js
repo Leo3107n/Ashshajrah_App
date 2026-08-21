@@ -21,7 +21,7 @@ export default function PortalHeader() {
         <Image source={require("../../assets/logo.webp")} style={styles.logo} resizeMode="contain" />
         <AppText numberOfLines={1} style={styles.title}>{sectionTitle(role, section)}</AppText>
       </View>
-      {["student", "teacher"].includes(role) ? <Pressable accessibilityLabel="Notifications" onPress={() => router.push(`/(app)/${role}/notifications`)} style={styles.notification}><Ionicons color={colors.primary} name="notifications-outline" size={20}/></Pressable> : null}
+      {role === "teacher" ? <Pressable accessibilityLabel="Notifications" onPress={() => router.push(`/(app)/${role}/notifications`)} style={styles.notification}><Ionicons color={colors.primary} name="notifications-outline" size={20}/></Pressable> : null}
       <Pressable
         accessibilityLabel="Open profile"
         accessibilityRole="button"

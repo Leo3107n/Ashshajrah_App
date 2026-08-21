@@ -12,6 +12,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
+import SubjectDropdown from "../../../src/components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
@@ -356,11 +357,13 @@ export default function SuperAdminUsers() {
               {assignmentData.courses.map((item) => <FilterChip active={assignmentForm?.courseId === item.id} key={item.id} label={item.class_level || item.title} onPress={() => setAssignmentForm((current) => ({ ...current, courseId: item.id, subjectId: "" }))} />)}
             </View>
             <AppText style={styles.staffLabel}>SUBJECT</AppText>
-            <View style={styles.optionGrid}>
-              {assignmentData.subjects
-                .filter((subject) => !assignmentForm?.courseId || assignmentData.courseSubjects.some((link) => link.course_id === assignmentForm.courseId && link.subject_id === subject.id))
-                .map((item) => <FilterChip active={assignmentForm?.subjectId === item.id} key={item.id} label={item.name} onPress={() => setAssignmentForm((current) => ({ ...current, subjectId: item.id }))} />)}
-            </View>
+            <SubjectDropdown
+              allowAll={false}
+              onChange={(subjectId) => setAssignmentForm((current) => ({ ...current, subjectId }))}
+              options={assignmentData.subjects.filter((subject) => !assignmentForm?.courseId || assignmentData.courseSubjects.some((link) => link.course_id === assignmentForm.courseId && link.subject_id === subject.id))}
+              placeholder="Choose a subject"
+              selectedId={assignmentForm?.subjectId}
+            />
             <View style={styles.selfNotice}><Ionicons color={colors.secondary} name="time-outline" size={20} /><AppText style={styles.selfText}>Lecture scheduling will still prevent this teacher from being placed in overlapping time slots.</AppText></View>
             <PillButton loading={working} onPress={createAssignment} style={styles.createButton}>Save Assignment</PillButton>
           </ScrollView>

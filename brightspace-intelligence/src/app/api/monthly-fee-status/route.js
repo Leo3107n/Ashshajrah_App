@@ -59,7 +59,13 @@ async function getLatestMonthlyFee(studentIds) {
       c.title AS class_title
     FROM regular_monthly_fee_voucher_items item
     INNER JOIN fee_vouchers fv ON fv.id = item.voucher_id
-    LEFT JOIN fee_submissions fs ON fs.voucher_id = fv.id
+    LEFT JOIN LATERAL (
+      SELECT fs.status
+      FROM fee_submissions fs
+      WHERE fs.voucher_id = fv.id
+      ORDER BY fs.created_at DESC
+      LIMIT 1
+    ) fs ON TRUE
     LEFT JOIN regular_monthly_fee_batches b ON b.id = item.batch_id
     LEFT JOIN courses c ON c.id = b.class_id
     WHERE item.student_id = ANY(${studentIds}::uuid[])
@@ -90,7 +96,13 @@ async function getMonthlyFeesForStudents(studentIds) {
       c.title AS class_title
     FROM regular_monthly_fee_voucher_items item
     INNER JOIN fee_vouchers fv ON fv.id = item.voucher_id
-    LEFT JOIN fee_submissions fs ON fs.voucher_id = fv.id
+    LEFT JOIN LATERAL (
+      SELECT fs.status
+      FROM fee_submissions fs
+      WHERE fs.voucher_id = fv.id
+      ORDER BY fs.created_at DESC
+      LIMIT 1
+    ) fs ON TRUE
     LEFT JOIN regular_monthly_fee_batches b ON b.id = item.batch_id
     LEFT JOIN courses c ON c.id = b.class_id
     WHERE (
@@ -132,7 +144,7 @@ export async function GET() {
     }
 
     const daysLeft = daysUntil(latest.due_date);
-    const isPaid = ["verified"].includes(String(latest.effective_status || "").toLowerCase());
+    const isPaid = ["verified", "approved", "paid"].includes(String(latest.effective_status || "").toLowerCase());
     const isSubmitted = ["submitted"].includes(String(latest.effective_status || "").toLowerCase());
     const overdue = typeof daysLeft === "number" && daysLeft < 0 && !isPaid;
     const deadlinePending = typeof daysLeft === "number" && daysLeft >= 0 && !isPaid;
@@ -158,7 +170,7 @@ export async function GET() {
       is_submitted: isSubmitted,
       children: childFees.map((item) => {
         const itemDaysLeft = daysUntil(item.due_date);
-        const itemPaid = ["verified"].includes(String(item.effective_status || "").toLowerCase());
+        const itemPaid = ["verified", "approved", "paid"].includes(String(item.effective_status || "").toLowerCase());
         return {
           ...item,
           days_left: itemDaysLeft,

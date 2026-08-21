@@ -15,6 +15,7 @@ import {
   View,
 } from "react-native";
 import api from "../../../src/api";
+import SubjectDropdown from "../../../src/components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../../src/components/ui";
 import { useAuth } from "../../../src/context/AuthContext";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../../src/theme";
@@ -362,7 +363,13 @@ export default function SuperAdminAcademics() {
                 <AppText style={styles.fieldLabel}>CLASS</AppText>
                 <View style={styles.classOptions}>{assignmentData.courses.map((item) => <SelectChip active={lectureForm?.courseId === item.id} key={item.id} label={item.class_level || item.title} onPress={() => setLectureForm((current) => ({ ...current, courseId: item.id, subjectId: "", teacherId: "" }))} />)}</View>
                 <AppText style={styles.fieldLabel}>SUBJECT</AppText>
-                <View style={styles.classOptions}>{assignmentData.subjects.filter((subject) => assignmentData.courseSubjects.some((link) => link.course_id === lectureForm?.courseId && link.subject_id === subject.id)).map((item) => <SelectChip active={lectureForm?.subjectId === item.id} key={item.id} label={item.name} onPress={() => setLectureForm((current) => ({ ...current, subjectId: item.id, teacherId: "" }))} />)}</View>
+                <SubjectDropdown
+                  allowAll={false}
+                  onChange={(subjectId) => setLectureForm((current) => ({ ...current, subjectId, teacherId: "" }))}
+                  options={assignmentData.subjects.filter((subject) => assignmentData.courseSubjects.some((link) => link.course_id === lectureForm?.courseId && link.subject_id === subject.id))}
+                  placeholder="Choose a subject"
+                  selectedId={lectureForm?.subjectId}
+                />
                 <AppText style={styles.fieldLabel}>TEACHER</AppText>
                 <View style={styles.classOptions}>{assignmentData.teachers.filter((teacher) => assignmentData.items?.some((assignment) => assignment.teacher_id === teacher.id && assignment.course_id === lectureForm?.courseId && assignment.subject_id === lectureForm?.subjectId)).map((item) => <SelectChip active={lectureForm?.teacherId === item.id} key={item.id} label={item.full_name} onPress={() => setLectureForm((current) => ({ ...current, teacherId: item.id }))} />)}</View>
               </>

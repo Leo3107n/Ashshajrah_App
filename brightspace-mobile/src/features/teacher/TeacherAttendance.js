@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
@@ -73,7 +74,7 @@ export default function TeacherAttendance(){
     <AppText variant="display">Attendance</AppText><AppText style={styles.subtitle}>Record attendance for your completed or live classrooms.</AppText>
     {error&&!data.selectedLecture?<SurfaceCard style={styles.error}><AppText style={styles.errorText}>{error}</AppText><PillButton label="Try Again" onPress={()=>load()} style={styles.retry}/></SurfaceCard>:null}
     <Step number="1" title="Select Class"/><Rail>{(data.classes||[]).map((item,index)=>{const value=classValue(item);return <Chip active={classLevel===value} key={`${value}-${index}`} label={value||"Unassigned"} onPress={()=>chooseClass(value)}/>;})}</Rail>
-    {classLevel?<><Step number="2" title="Select Subject"/><Rail>{subjects.map((item)=><Chip active={subjectId===item.id} key={item.id} label={item.name} onPress={()=>chooseSubject(item.id)}/>)}</Rail></>:null}
+    {classLevel?<><Step number="2" title="Select Subject"/><SubjectDropdown allowAll={false} onChange={chooseSubject} options={subjects} placeholder="Choose a subject" selectedId={subjectId}/></>:null}
     {classLevel&&subjectId?<><Step number="3" title="Select Lecture"/><View style={styles.lectureList}>{(data.lectures||[]).length?data.lectures.map((item)=><Pressable key={item.id} onPress={()=>chooseLecture(item.id)} style={[styles.lecture,item.id===lectureId&&styles.selectedLecture]}><View style={styles.lectureIcon}><Ionicons color={colors.secondary} name="videocam-outline" size={18}/></View><View style={styles.lectureBody}><AppText style={styles.lectureTitle}>{item.title||item.subject_name}</AppText><AppText style={styles.lectureMeta}>{dateTime(item.scheduled_start)} · {String(item.status||"").replaceAll("_"," ")}</AppText></View>{item.id===lectureId?<Ionicons color={colors.emeraldMid} name="checkmark-circle" size={22}/>:null}</Pressable>):<Empty text="No completed or active lectures are available for this selection."/ >}</View></>:null}
     {data.selectedLecture?<><View style={styles.rosterHead}><View><AppText style={styles.rosterTitle}>Student Roster</AppText><AppText style={styles.rosterMeta}>{data.students?.length||0} assigned students</AppText></View><Pressable onPress={()=>markAll("present")} style={styles.allPresent}><Ionicons color={colors.emeraldMid} name="checkmark-done-outline" size={15}/><AppText style={styles.allPresentText}>All Present</AppText></Pressable></View>
       <View style={styles.counts}>{STATUSES.map(([key,label,,tone])=><View key={key} style={[styles.count,styles[`${tone}Count`]]}><AppText style={styles.countValue}>{counts[key]||0}</AppText><AppText style={styles.countLabel}>{label}</AppText></View>)}</View>

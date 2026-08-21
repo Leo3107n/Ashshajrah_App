@@ -6,6 +6,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Alert, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, TextInput, View } from "react-native";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
@@ -287,17 +288,15 @@ export default function CoordinatorTeachers() {
             {assignmentForm?.courseId ? (
               <>
                 <AppText style={styles.fieldLabel}>SUBJECT</AppText>
-                <View style={styles.chips}>
-                  {availableSubjects.length ? availableSubjects.map((subject) => (
-                    <Pressable
-                      key={subject.id}
-                      onPress={() => setAssignmentForm((current) => ({ ...current, subjectId: subject.id }))}
-                      style={[styles.chip, assignmentForm?.subjectId === subject.id && styles.chipActive]}
-                    >
-                      <AppText style={[styles.chipText, assignmentForm?.subjectId === subject.id && styles.chipTextActive]}>{subject.name}</AppText>
-                    </Pressable>
-                  )) : <AppText style={styles.emptyText}>No subjects configured for this class.</AppText>}
-                </View>
+                {availableSubjects.length ? (
+                  <SubjectDropdown
+                    allowAll={false}
+                    onChange={(subjectId) => setAssignmentForm((current) => ({ ...current, subjectId }))}
+                    options={availableSubjects}
+                    placeholder="Choose a subject"
+                    selectedId={assignmentForm?.subjectId}
+                  />
+                ) : <AppText style={styles.emptyText}>No subjects configured for this class.</AppText>}
               </>
             ) : null}
             <PillButton disabled={saving} loading={saving} onPress={createAssignment} style={styles.saveButton}>Confirm Assignment</PillButton>

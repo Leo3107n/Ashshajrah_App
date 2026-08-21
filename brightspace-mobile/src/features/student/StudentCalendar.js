@@ -4,14 +4,22 @@ import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 import StudentLectureSheet, { lectureDate, lectureTone, readable } from "./StudentLectureSheet";
 
 const PERIODS = [
+  ["selected_date", "Day"],
   ["selected_week", "Week"],
   ["selected_month", "Month"],
 ];
+
+function periodLabel(period) {
+  if (period === "selected_date") return "day";
+  if (period === "selected_week") return "week";
+  return "month";
+}
 
 function uniqueEvents(items) {
   const seen = new Set();
@@ -34,7 +42,7 @@ function localDateKey(date = new Date()) {
 
 export default function StudentCalendar() {
   const [selectedDate, setSelectedDate] = useState(localDateKey());
-  const [period, setPeriod] = useState("selected_week");
+  const [period, setPeriod] = useState("selected_date");
   const [subjectId, setSubjectId] = useState("");
   const [data, setData] = useState({ items: [], subjects: [], markedDates: [] });
   const [internalEvents, setInternalEvents] = useState([]);
@@ -138,16 +146,15 @@ export default function StudentCalendar() {
           ))}
         </ScrollView>
 
-        <ScrollView contentContainerStyle={styles.filters} horizontal showsHorizontalScrollIndicator={false}>
-          <Filter active={!subjectId} label="All Subjects" onPress={() => setSubjectId("")} />
-          {data.subjects.map((subject) => (
-            <Filter active={subjectId === subject.id} key={subject.id} label={subject.name} onPress={() => setSubjectId(subject.id)} />
-          ))}
-        </ScrollView>
+        <SubjectDropdown
+          onChange={setSubjectId}
+          options={data.subjects}
+          selectedId={subjectId}
+        />
 
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Lectures</AppText>
-          <AppText style={styles.count}>{data.items.length} scheduled this {period === "selected_week" ? "week" : "month"}</AppText>
+          <AppText style={styles.count}>{data.items.length} scheduled this {periodLabel(period)}</AppText>
         </View>
 
         {error ? (
@@ -163,8 +170,8 @@ export default function StudentCalendar() {
         ) : (
           <SurfaceCard style={styles.empty}>
             <Ionicons color={colors.secondary} name="calendar-clear-outline" size={30} />
-            <AppText style={styles.emptyTitle}>No lectures in this period</AppText>
-            <AppText style={styles.emptyText}>Select another marked date, week, or month to view its schedule.</AppText>
+            <AppText style={styles.emptyTitle}>No lectures in this {periodLabel(period)}</AppText>
+            <AppText style={styles.emptyText}>Select another marked date or change the Day, Week, or Month filter.</AppText>
           </SurfaceCard>
         )}
 
@@ -194,7 +201,7 @@ function EventSection({ activeType, error, internalEvents, onChangeType, period,
     <>
       <View style={styles.sectionHeader}>
         <AppText style={styles.sectionTitle}>Events</AppText>
-        <AppText style={styles.count}>{events.length} this {period === "selected_week" ? "week" : "month"}</AppText>
+        <AppText style={styles.count}>{events.length} this {periodLabel(period)}</AppText>
       </View>
 
       <View style={styles.eventTypeRow}>
@@ -220,7 +227,7 @@ function EventSection({ activeType, error, internalEvents, onChangeType, period,
         <SurfaceCard style={styles.empty}>
           <Ionicons color={colors.secondary} name="calendar-number-outline" size={30} />
           <AppText style={styles.emptyTitle}>No {type} events</AppText>
-          <AppText style={styles.emptyText}>Select another week or month to view available events.</AppText>
+          <AppText style={styles.emptyText}>Select another date or change the Day, Week, or Month filter.</AppText>
         </SurfaceCard>
       )}
     </>

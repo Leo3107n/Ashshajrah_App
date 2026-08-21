@@ -7,6 +7,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
@@ -140,12 +141,11 @@ export default function ParentLectures() {
           ))}
         </ScrollView>
         {data.subjects.length ? (
-          <ScrollView contentContainerStyle={styles.subjects} horizontal showsHorizontalScrollIndicator={false}>
-            <Filter active={!subjectId} label="All Subjects" onPress={() => setSubjectId("")} />
-            {data.subjects.map((subject) => (
-              <Filter active={subjectId === subject.id} key={subject.id} label={subject.name} onPress={() => setSubjectId(subject.id)} />
-            ))}
-          </ScrollView>
+          <SubjectDropdown
+            onChange={setSubjectId}
+            options={data.subjects}
+            selectedId={subjectId}
+          />
         ) : null}
 
         <View style={styles.countRow}>

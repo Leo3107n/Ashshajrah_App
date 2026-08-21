@@ -74,11 +74,21 @@ function overdueFeeMessage(status) {
 }
 
 function pendingFeeMessage(status) {
-  if (!status?.deadline_pending || status?.overdue || status?.is_paid || status?.is_submitted) return "";
+  if (!status?.deadline_pending || status?.overdue || status?.is_paid) return "";
   const dueLabel = dateLabel(status.due_date);
   return dueLabel
     ? `Fee Deadline is ${dueLabel}. Please submit payment before the due date.`
     : "Fee voucher deadline is pending. Please submit payment before the due date.";
+}
+
+function feeStatusLabel(stats, monthlyFee) {
+  if (monthlyFee?.available) {
+    if (monthlyFee.is_paid) return "Paid / Verified";
+    if (monthlyFee.overdue) return "Overdue";
+    if (monthlyFee.is_submitted) return "Payment Submitted";
+    if (monthlyFee.deadline_pending) return "Deadline Pending";
+  }
+  return stats?.fee_status_label || "Not Paid";
 }
 
 function planTone(value) {
@@ -202,7 +212,7 @@ export default function StudentHome() {
     },
     {
       label: "Fee Status",
-      value: data.stats.fee_status_label || "Not Paid",
+      value: feeStatusLabel(data.stats, data.monthlyFee),
       icon: "wallet-outline",
       tone: "mint",
       section: "fees",
@@ -310,7 +320,6 @@ export default function StudentHome() {
       <MonthlyPlanPreview
         item={dashboardPlan}
         onPress={() => go("monthly-plans")}
-        summary={data.monthlyPlanSummary}
       />
 
       <SectionHeader title="Announcements" />
@@ -319,7 +328,7 @@ export default function StudentHome() {
           data.headlines.slice(0, 3).map((item, index) => (
             <View key={item.id || index} style={styles.announcement}>
               <View style={styles.announcementIcon}>
-                <Ionicons color={colors.secondary} name="megaphone-outline" size={18} />
+                <Ionicons color={colors.white} name="megaphone-outline" size={18} />
               </View>
               <View style={styles.announcementBody}>
                 <AppText style={styles.announcementTitle}>
@@ -501,7 +510,7 @@ function EducationalDocuments({ classDocuments: classBucket, documents, otherDoc
                   </AppText>
                 ) : null}
               </View>
-              <Ionicons color={colors.outline} name="download-outline" size={15} />
+              <Ionicons color={colors.gold} name="download-outline" size={15} />
             </Pressable>
           ))}
         </View>
@@ -558,7 +567,7 @@ function EducationalDocuments({ classDocuments: classBucket, documents, otherDoc
   );
 }
 
-function MonthlyPlanPreview({ item, onPress, summary }) {
+function MonthlyPlanPreview({ item, onPress }) {
   const mediaCount = Array.isArray(item?.media)
     ? item.media.length
     : Array.isArray(item?.image_urls)
@@ -603,10 +612,6 @@ function MonthlyPlanPreview({ item, onPress, summary }) {
           <View style={styles.planMeta}>
             <Ionicons color={colors.primary} name="attach-outline" size={16} />
             <AppText style={styles.planMetaText}>{mediaCount} resources</AppText>
-          </View>
-          <View style={styles.planMeta}>
-            <Ionicons color={colors.primary} name="albums-outline" size={16} />
-            <AppText style={styles.planMetaText}>{summary?.total || 0} total plans</AppText>
           </View>
         </View>
         <View style={styles.planFooter}>
@@ -811,9 +816,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     padding: space.md,
     borderWidth: 1,
-    borderColor: colors.borderGreen,
+    borderColor: colors.gold,
     borderRadius: radius.lg,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.goldPale,
   },
   announcementIcon: {
     width: 36,
@@ -821,7 +826,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     borderRadius: 18,
-    backgroundColor: colors.goldPale,
+    backgroundColor: colors.gold,
   },
   announcementBody: { flex: 1, marginLeft: space.sm },
   announcementTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
@@ -831,7 +836,7 @@ const styles = StyleSheet.create({
   documentsTitleWrap: { flexDirection: "row", alignItems: "center", gap: space.xs },
   documentsTitle: { color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
   documentsCount: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
-  documentsDropdown: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.md, paddingVertical: space.xs, borderWidth: 1, borderColor: colors.outlineVariant, borderRadius: radius.full, backgroundColor: colors.surface },
+  documentsDropdown: { minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: space.md, paddingVertical: space.xs, borderWidth: 1, borderColor: colors.gold, borderRadius: radius.full, backgroundColor: colors.goldPale },
   documentsDropdownCopy: { flex: 1, marginRight: space.sm },
   documentsDropdownLabel: { color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 8, letterSpacing: 1 },
   documentsDropdownValue: { marginTop: 1, color: colors.primary, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },

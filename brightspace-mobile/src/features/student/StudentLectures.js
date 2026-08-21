@@ -3,6 +3,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 import StudentLectureSheet from "./StudentLectureSheet";
@@ -78,12 +79,11 @@ export default function StudentLectures() {
             <Filter active={filter === value} key={value} label={label} onPress={() => setFilter(value)} />
           ))}
         </ScrollView>
-        <ScrollView contentContainerStyle={styles.subjects} horizontal showsHorizontalScrollIndicator={false}>
-          <Filter active={!subjectId} label="All Subjects" onPress={() => setSubjectId("")} />
-          {data.subjects.map((subject) => (
-            <Filter active={subjectId === subject.id} key={subject.id} label={subject.name} onPress={() => setSubjectId(subject.id)} />
-          ))}
-        </ScrollView>
+        <SubjectDropdown
+          onChange={setSubjectId}
+          options={data.subjects}
+          selectedId={subjectId}
+        />
 
         <View style={styles.countRow}>
           <AppText style={styles.countTitle}>{visible.length} lectures</AppText>

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Linking, Pressable, RefreshControl, ScrollView, StyleSheet, View } from "react-native";
 import { Calendar } from "react-native-calendars";
 import api from "../../api";
+import SubjectDropdown from "../../components/SubjectDropdown";
 import {
   AppText,
   DashboardSkeleton,
@@ -23,9 +24,16 @@ import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 
 const PERIODS = [
+  ["selected_date", "Day"],
   ["selected_week", "Week"],
   ["selected_month", "Month"],
 ];
+
+function periodLabel(period) {
+  if (period === "selected_date") return "day";
+  if (period === "selected_week") return "week";
+  return "month";
+}
 
 function uniqueEvents(items) {
   const seen = new Set();
@@ -106,7 +114,8 @@ function eventActionState(item) {
 
 export default function ParentCalendar() {
   const [selectedDate, setSelectedDate] = useState(localDateKey());
-  const [period, setPeriod] = useState("selected_week");
+  const [period, setPeriod] = useState("selected_date");
+  const [subjectId, setSubjectId] = useState("");
   const [data, setData] = useState({ items: [], children: [], subjects: [], markedDates: [] });
   const [internalEvents, setInternalEvents] = useState([]);
   const [publicEvents, setPublicEvents] = useState([]);
@@ -126,6 +135,7 @@ export default function ParentCalendar() {
           range: period,
           date: selectedDate,
           childId: childFilter || undefined,
+          subjectId: subjectId || undefined,
         }),
         api.parent.calendarEvents({
           range: period,
@@ -152,13 +162,13 @@ export default function ParentCalendar() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [period, selectedDate, childFilter]);
+  }, [period, selectedDate, childFilter, subjectId]);
 
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
     setSelectedLecture(null);
-  }, [period, selectedDate, childFilter]);
+  }, [period, selectedDate, childFilter, subjectId]);
 
   const requiresChildSelection = data.children.length > 1 && !childFilter;
 
@@ -236,6 +246,12 @@ export default function ParentCalendar() {
           ))}
         </ScrollView>
 
+        <SubjectDropdown
+          onChange={setSubjectId}
+          options={data.subjects}
+          selectedId={subjectId}
+        />
+
         {/* Child filter */}
         {data.children.length > 1 ? (
           <ChildDropdown
@@ -249,7 +265,7 @@ export default function ParentCalendar() {
 
         <View style={styles.sectionHeader}>
           <AppText style={styles.sectionTitle}>Classes</AppText>
-          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled this {period === "selected_week" ? "week" : "month"}</AppText>
+          <AppText style={styles.count}>{requiresChildSelection ? 0 : data.items.length} scheduled this {periodLabel(period)}</AppText>
         </View>
 
         {error ? (
@@ -271,9 +287,9 @@ export default function ParentCalendar() {
         ) : (
           <SurfaceCard style={styles.state}>
             <Ionicons color={colors.secondary} name="calendar-clear-outline" size={30} />
-            <AppText style={styles.stateTitle}>No classes in this period</AppText>
+            <AppText style={styles.stateTitle}>No classes in this {periodLabel(period)}</AppText>
             <AppText style={styles.stateText}>
-              Select another marked date, week, or month to view the schedule.
+              Select another marked date or change the Day, Week, or Month filter.
             </AppText>
           </SurfaceCard>
         )}
@@ -311,7 +327,7 @@ function EventSection({ activeType, error, internalEvents, onChangeType, period,
     <>
       <View style={styles.sectionHeader}>
         <AppText style={styles.sectionTitle}>Events</AppText>
-        <AppText style={styles.count}>{events.length} this {period === "selected_week" ? "week" : "month"}</AppText>
+        <AppText style={styles.count}>{events.length} this {periodLabel(period)}</AppText>
       </View>
 
       <View style={styles.eventTypeRow}>
@@ -338,7 +354,7 @@ function EventSection({ activeType, error, internalEvents, onChangeType, period,
           <Ionicons color={colors.secondary} name="calendar-number-outline" size={30} />
           <AppText style={styles.stateTitle}>No {type} events</AppText>
           <AppText style={styles.stateText}>
-            Select another week or month to view available events.
+            Select another date or change the Day, Week, or Month filter.
           </AppText>
         </SurfaceCard>
       )}
