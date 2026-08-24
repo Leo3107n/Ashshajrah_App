@@ -176,10 +176,6 @@ export async function POST(request) {
     const session = await requireRole(ALLOWED_ROLES);
     const body = await request.json().catch(() => ({}));
     const note = clean(body?.note);
-    const requestedStudentIds = [
-      ...(Array.isArray(body?.studentIds) ? body.studentIds : []),
-      body?.studentId || body?.student_id,
-    ].map(clean).filter(Boolean);
     const targetAll = body?.targetAll === true;
     const requestedVisibility = normalizeKey(body?.visibility);
     const visibility = VISIBILITY.has(requestedVisibility) ? requestedVisibility : "parent";
@@ -196,6 +192,12 @@ export async function POST(request) {
     await ensureOwnerOnlyNoteSchema();
     let recipientIds = [];
     if (visibility !== "teacher_only") {
+      // Visible Teacher Notes are class-wide. One-to-one learner notes are not
+      // part of the communication model, so individual recipient payloads are
+      // rejected even if an older client still sends one.
+      if (!targetAll) {
+        return json("Teacher notes can only be shared with the entire class.", 400);
+      }
       const assignedStudents = await prisma.$queryRaw`
         SELECT DISTINCT sp.id::text AS id
         FROM enrollments e
@@ -207,7 +209,7 @@ export async function POST(request) {
         ORDER BY 1
       `;
       const assignedIds = new Set(assignedStudents.map((student) => student.id));
-      recipientIds = targetAll ? [...assignedIds] : [...new Set(requestedStudentIds)];
+      recipientIds = [...assignedIds];
       if (!recipientIds.length) return json("Select one student or all students.", 400);
       if (recipientIds.some((id) => !assignedIds.has(id))) {
         return json("One or more selected students are not assigned to this class.", 404);

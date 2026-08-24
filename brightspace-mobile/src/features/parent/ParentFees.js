@@ -152,10 +152,7 @@ export default function ParentFees() {
         refreshControl={
           <RefreshControl
             colors={[colors.gold]}
-            onRefresh={() => {
-              setChildId("");
-              if (!childId) load({ refresh: true });
-            }}
+            onRefresh={() => load({ refresh: true })}
             refreshing={refreshing}
             tintColor={colors.gold}
           />

@@ -41,83 +41,100 @@ async function getParentStudentIds(userId) {
   return rows.map((row) => row.id).filter(Boolean);
 }
 
-async function getLatestMonthlyFee(studentIds) {
-  if (!studentIds.length) return null;
-
-  const [row] = await prisma.$queryRaw`
-    SELECT
-      fv.voucher_no,
-      fv.status::text AS voucher_status,
-      item.due_date,
-      item.student_name,
-      item.parent_name,
-      item.base_amount::float8 AS base_amount,
-      item.late_fee_amount::float8 AS late_fee_amount,
-      item.voucher_id::text AS voucher_id,
-      COALESCE(fs.status::text, 'not_submitted') AS payment_status,
-      COALESCE(fs.status::text, fv.status::text, 'unpaid') AS effective_status,
-      c.title AS class_title
-    FROM regular_monthly_fee_voucher_items item
-    INNER JOIN fee_vouchers fv ON fv.id = item.voucher_id
-    LEFT JOIN LATERAL (
-      SELECT fs.status
-      FROM fee_submissions fs
-      WHERE fs.voucher_id = fv.id
-      ORDER BY fs.created_at DESC
-      LIMIT 1
-    ) fs ON TRUE
-    LEFT JOIN regular_monthly_fee_batches b ON b.id = item.batch_id
-    LEFT JOIN courses c ON c.id = b.class_id
-    WHERE item.student_id = ANY(${studentIds}::uuid[])
-    ORDER BY
-      item.created_at DESC,
-      item.due_date DESC NULLS LAST
-    LIMIT 1
-  `;
-
-  return row || null;
-}
-
 async function getMonthlyFeesForStudents(studentIds) {
   if (!studentIds.length) return [];
 
   const rows = await prisma.$queryRaw`
-    SELECT DISTINCT ON (item.student_id)
-      item.student_id::text AS student_id,
-      fv.voucher_no,
-      item.due_date,
-      item.student_name,
-      item.parent_name,
-      item.base_amount::float8 AS base_amount,
-      item.late_fee_amount::float8 AS late_fee_amount,
-      COALESCE(fs.status::text, fv.status::text, 'unpaid') AS effective_status,
+    WITH student_context AS (
+      SELECT sp.id, su.full_name AS student_name
+      FROM student_profiles sp
+      INNER JOIN users su ON su.id = sp.user_id
+      WHERE sp.id = ANY(${studentIds}::uuid[])
+    ),
+    fee_sources AS (
+      SELECT
+        sc.id AS student_id,
+        fv.id AS voucher_id,
+        fv.voucher_no,
+        fv.due_date,
+        sc.student_name,
+        ''::text AS parent_name,
+        fv.amount::float8 AS base_amount,
+        0::float8 AS late_fee_amount,
+        fv.status::text AS voucher_status,
+        fv.created_at,
+        ''::text AS class_title,
+        FALSE AS is_monthly_voucher
+      FROM student_context sc
+      INNER JOIN fee_vouchers fv ON (
+        fv.student_id = sc.id
+        OR (
+          fv.student_id IS NULL
+          AND EXISTS (
+            SELECT 1
+            FROM enrollments e
+            WHERE e.student_id = sc.id
+              AND e.registration_id IS NOT NULL
+              AND (fv.registration_id = e.registration_id OR fv.registration_lead_id = e.registration_id)
+          )
+        )
+      )
+
+      UNION ALL
+
+      SELECT
+        item.student_id,
+        fv.id AS voucher_id,
+        fv.voucher_no,
+        -- The generated challan is authoritative. Batch item dates may retain
+        -- an older deadline after the voucher itself has been corrected.
+        fv.due_date,
+        item.student_name,
+        COALESCE(item.parent_name, '') AS parent_name,
+        item.base_amount::float8 AS base_amount,
+        item.late_fee_amount::float8 AS late_fee_amount,
+        fv.status::text AS voucher_status,
+        fv.created_at,
+        COALESCE(c.title, '') AS class_title,
+        TRUE AS is_monthly_voucher
+      FROM regular_monthly_fee_voucher_items item
+      INNER JOIN fee_vouchers fv ON fv.id = item.voucher_id
+      LEFT JOIN regular_monthly_fee_batches b ON b.id = item.batch_id
+      LEFT JOIN courses c ON c.id = b.class_id
+      WHERE item.student_id = ANY(${studentIds}::uuid[])
+    ),
+    deduped_sources AS (
+      SELECT DISTINCT ON (student_id, voucher_id) *
+      FROM fee_sources
+      ORDER BY student_id, voucher_id, is_monthly_voucher DESC
+    )
+    SELECT DISTINCT ON (source.student_id)
+      source.student_id::text AS student_id,
+      source.voucher_id::text AS voucher_id,
+      source.voucher_no,
+      source.due_date,
+      source.student_name,
+      source.parent_name,
+      source.base_amount,
+      source.late_fee_amount,
+      COALESCE(fs.status::text, source.voucher_status, 'unpaid') AS effective_status,
       COALESCE(fs.status::text, 'not_submitted') AS payment_status,
-      fv.status::text AS voucher_status,
-      c.title AS class_title
-    FROM regular_monthly_fee_voucher_items item
-    INNER JOIN fee_vouchers fv ON fv.id = item.voucher_id
+      source.voucher_status,
+      source.class_title,
+      source.created_at
+    FROM deduped_sources source
     LEFT JOIN LATERAL (
       SELECT fs.status
       FROM fee_submissions fs
-      WHERE fs.voucher_id = fv.id
+      WHERE fs.voucher_id = source.voucher_id
       ORDER BY fs.created_at DESC
       LIMIT 1
     ) fs ON TRUE
-    LEFT JOIN regular_monthly_fee_batches b ON b.id = item.batch_id
-    LEFT JOIN courses c ON c.id = b.class_id
-    WHERE (
-      item.student_id = ANY(${studentIds}::uuid[])
-      OR fv.registration_lead_id IN (
-         SELECT e.registration_id
-         FROM enrollments e
-         WHERE e.student_id = ANY(${studentIds}::uuid[])
-           AND e.registration_id IS NOT NULL
-       )
-    )
     ORDER BY
-      item.student_id,
-      item.created_at DESC,
-      item.due_date DESC NULLS LAST
+      source.student_id,
+      source.created_at DESC NULLS LAST,
+      source.due_date DESC NULLS LAST,
+      source.voucher_id DESC
   `;
 
   return rows;
@@ -137,10 +154,15 @@ export async function GET() {
         ? [await getStudentId(session.user.id)].filter(Boolean)
         : await getParentStudentIds(session.user.id);
 
-    const latest = await getLatestMonthlyFee(studentIds);
     const childFees = await getMonthlyFeesForStudents(studentIds);
+    const latest = [...childFees].sort((left, right) => {
+      const leftCreated = normalizeDate(left.created_at)?.getTime() || 0;
+      const rightCreated = normalizeDate(right.created_at)?.getTime() || 0;
+      if (leftCreated !== rightCreated) return rightCreated - leftCreated;
+      return (normalizeDate(right.due_date)?.getTime() || 0) - (normalizeDate(left.due_date)?.getTime() || 0);
+    })[0];
     if (!latest?.voucher_no) {
-      return json("Monthly fee status fetched.", 200, { available: false });
+      return json("Monthly fee status fetched.", 200, { available: false, children: [] });
     }
 
     const daysLeft = daysUntil(latest.due_date);

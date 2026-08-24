@@ -8,6 +8,7 @@ import SubjectDropdown from "../../components/SubjectDropdown";
 import { AppText, DashboardSkeleton, PillButton, Screen, StatusChip, SurfaceCard } from "../../components/ui";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
 import StudentLectureSheet, { lectureDate, lectureTone, readable } from "./StudentLectureSheet";
+import { buildCalendarMarks } from "../../utils/calendarSelection";
 
 const PERIODS = [
   ["selected_date", "Day"],
@@ -93,17 +94,11 @@ export default function StudentCalendar() {
     load();
   }, [load]);
 
-  const marks = Object.fromEntries(
-    data.markedDates.map((item) => [
-      item.date,
-      { marked: true, dotColor: colors.gold },
-    ])
-  );
-  marks[selectedDate] = {
-    ...(marks[selectedDate] || {}),
-    selected: true,
-    selectedColor: colors.primaryContainer,
-  };
+  const marks = buildCalendarMarks(data.markedDates, selectedDate, period, {
+    dotColor: colors.gold,
+    selectionColor: colors.primaryContainer,
+    selectedTextColor: colors.white,
+  });
 
   if (loading && !data.subjects.length) {
     return <DashboardSkeleton message="Opening your calendar..." />;

@@ -30,6 +30,8 @@ export async function GET() {
         sp.age,
         sp.grade_level,
         sp.status::text AS status,
+        c.id::text AS course_id,
+        sub.id::text AS subject_id,
         sub.name AS subject_name,
         COALESCE(NULLIF(c.class_level, ''), c.title) AS course_title
       FROM teacher_assignments ta

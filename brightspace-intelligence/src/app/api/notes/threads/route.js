@@ -362,7 +362,10 @@ export async function GET(request) {
             AND (${childId || null}::uuid IS NULL OR sp.id = ${childId || null}::uuid)
           ORDER BY sp.id, e.course_id, c.class_level
         )
-        SELECT DISTINCT ON (nt.id, pc.id)
+        -- Multiple enrollment/class matches can point to the same thread and
+        -- child. All projected values are identical, so regular DISTINCT
+        -- removes those duplicates while still allowing newest-first sorting.
+        SELECT DISTINCT
           nt.id::text AS id,
           nt.teacher_id::text AS teacher_id,
           nt.course_id::text AS course_id,

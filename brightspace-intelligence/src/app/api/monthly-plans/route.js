@@ -20,7 +20,7 @@ function planStatus(startDate, endDate) {
   const start = normalizeDate(startDate);
   const end = normalizeDate(endDate);
   if (start && today < start) return "upcoming";
-  if (end && today > end) return "completed";
+  if (end && today > end) return "expired";
   return "active";
 }
 
@@ -83,7 +83,7 @@ export async function GET(request) {
         total: items.length,
         active: items.filter((item) => item.status === "active").length,
         upcoming: items.filter((item) => item.status === "upcoming").length,
-        completed: items.filter((item) => item.status === "completed").length,
+        expired: items.filter((item) => item.status === "expired").length,
       },
     });
   } catch (error) {

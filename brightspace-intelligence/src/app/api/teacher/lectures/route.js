@@ -69,6 +69,7 @@ export async function GET(request) {
         ls.meet_link_source,
         ls.google_meet_space_id,
         ls.teacher_id::text AS teacher_id,
+        e.course_id::text AS course_id,
         ls.subject_id::text AS subject_id,
         ls.title,
         ls.description,

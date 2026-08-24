@@ -119,7 +119,7 @@ export default function ParentHomework() {
     <>
       <Screen
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
+        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
       >
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>YOUR CHILDREN</AppText>

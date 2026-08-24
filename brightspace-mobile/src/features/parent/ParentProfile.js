@@ -115,10 +115,7 @@ export default function ParentProfile() {
       refreshControl={
         <RefreshControl
           colors={[colors.gold]}
-          onRefresh={() => {
-            setSelectedChildId("");
-            if (!selectedChildId) load({ refresh: true });
-          }}
+          onRefresh={() => load({ refresh: true })}
           refreshing={refreshing}
           tintColor={colors.gold}
         />

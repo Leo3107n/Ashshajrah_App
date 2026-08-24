@@ -35,7 +35,8 @@ export async function GET(request) {
   try {
     const session = await requireRole(ALLOWED_ROLES);
     const { searchParams } = new URL(request.url);
-    const scope = buildParentStudentScope(session, normalizeText(searchParams.get("childId")));
+    const childId = normalizeText(searchParams.get("childId"));
+    const scope = buildParentStudentScope(session, childId);
     const range = normalizeText(searchParams.get("range") || searchParams.get("period")).toLowerCase();
     const selectedDate = isoDate(searchParams.get("date"));
     const subjectId = normalizeText(searchParams.get("subjectId"));
@@ -193,12 +194,25 @@ export async function GET(request) {
     }
     const children = [...childrenMap.values()];
 
-    const subjects = [
-      ...new Map(items.map((item) => [item.subject_id || item.subject_name, {
-        id: item.subject_id || item.subject_name,
-        name: item.subject_name,
-      }])).values(),
-    ].filter((subject) => subject.id && subject.name);
+    // Calendar filters must represent the enrolled curriculum, not merely the
+    // lectures scheduled inside the currently selected day/week/month. This
+    // keeps subjects with zero scheduled classes available in the dropdown.
+    const subjectStudentIds = linkedChildren
+      .filter((child) => childId ? child.id === childId : true)
+      .map((child) => child.id)
+      .filter(Boolean);
+    const subjects = subjectStudentIds.length
+      ? await prisma.$queryRaw`
+          SELECT DISTINCT sub.id::text AS id, sub.name
+          FROM enrollments e
+          INNER JOIN course_subjects cs ON cs.course_id = e.course_id
+          INNER JOIN subjects sub ON sub.id = cs.subject_id
+          WHERE e.student_id = ANY(${subjectStudentIds}::uuid[])
+            AND LOWER(e.status) = 'active'
+            AND COALESCE(sub.status, 'active'::user_status) = 'active'::user_status
+          ORDER BY sub.name ASC
+        `
+      : [];
 
     const markedDates = [
       ...new Set(

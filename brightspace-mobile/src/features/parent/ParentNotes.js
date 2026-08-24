@@ -38,18 +38,17 @@ export default function ParentNotes() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [threadWarning, setThreadWarning] = useState("");
 
   const load = useCallback(async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
+    setThreadWarning("");
     try {
-      const [notesResponse, threads] = await Promise.all([
-        api.parent.notes({ childId: childId || undefined }),
-        api.shared.notes.threads({ childId: childId || undefined }),
-      ]);
+      const notesResponse = await api.parent.notes({ childId: childId || undefined });
       setData({
         notes: notesResponse?.notes || [],
-        threads: threads?.items || [],
+        threads: [],
         children: notesResponse?.children || [],
       });
     } catch (nextError) {
@@ -84,7 +83,7 @@ export default function ParentNotes() {
     <>
       <Screen
         contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
+        refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
       >
         <View style={styles.heading}>
           <AppText style={styles.eyebrow}>STAY CONNECTED</AppText>
@@ -100,6 +99,13 @@ export default function ParentNotes() {
             placeholder="Choose a child to view notes and messages"
             selectedId={childId}
           />
+        ) : null}
+
+        {threadWarning ? (
+          <SurfaceCard style={styles.warningCard}>
+            <Ionicons color={colors.secondary} name="warning-outline" size={20} />
+            <AppText style={styles.warningText}>{threadWarning}</AppText>
+          </SurfaceCard>
         ) : null}
 
         {error ? (
@@ -123,13 +129,6 @@ export default function ParentNotes() {
               emptyTitle="No child notes"
               items={childNotes}
               title="Notes for Children"
-            />
-            <ThreadsSection
-              emptyText="Teacher message threads for this child or class will appear here."
-              emptyTitle="No child messages"
-              items={data.threads}
-              onOpen={setSelectedThread}
-              title="Child Messages"
             />
           </>
         )}
@@ -178,7 +177,6 @@ function NotesList({ emptyText, emptyTitle, items }) {
         <View style={styles.avatar}><AppText style={styles.avatarText}>{String(item.teacher_name || "T")[0].toUpperCase()}</AppText></View>
         <View style={styles.noteHeading}>
           <AppText style={styles.noteTeacher}>{item.teacher_name || "Teacher"}</AppText>
-          {item.student_name ? <AppText style={styles.noteChild}>{item.student_name}</AppText> : null}
           <AppText style={styles.noteDate}>{dateTime(item.created_at)}</AppText>
         </View>
         <View style={styles.readOnly}>
@@ -349,6 +347,8 @@ const styles = StyleSheet.create({
   stateText: { marginTop: 3, color: colors.outline, fontSize: fontSize.xs, textAlign: "center" },
   errorText: { marginTop: space.sm, color: colors.error, textAlign: "center" },
   retry: { marginTop: space.md },
+  warningCard: { flexDirection: "row", alignItems: "center", gap: space.sm, marginTop: space.md, borderWidth: 1, borderColor: colors.gold, backgroundColor: colors.goldPale },
+  warningText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
   notesSection: { marginTop: space.lg },
   notesSectionTitle: { color: colors.primary, fontFamily: fonts.display, fontSize: fontSize.lg },
   note: { marginTop: space.md },

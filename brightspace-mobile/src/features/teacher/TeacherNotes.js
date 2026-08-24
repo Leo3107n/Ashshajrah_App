@@ -65,7 +65,6 @@ function groupNoteRecipients(items) {
 
 export default function TeacherNotes() {
   const { user } = useAuth();
-  const [tab, setTab] = useState("notes");
   const [notes, setNotes] = useState([]);
   const [threads, setThreads] = useState([]);
   const [students, setStudents] = useState([]);
@@ -85,14 +84,13 @@ export default function TeacherNotes() {
     setError("");
 
     try {
-      const [noteData, threadData, studentData, lectureData] = await Promise.all([
+      const [noteData, studentData, lectureData] = await Promise.all([
         api.teacher.notes.list(),
-        api.shared.notes.threads(),
         api.teacher.students(),
         api.teacher.lectures.list(),
       ]);
       setNotes(noteData?.items || []);
-      setThreads(threadData?.items || []);
+      setThreads([]);
       setStudents(studentData?.items || []);
       setLectures(lectureData?.items || []);
     } catch (nextError) {
@@ -113,11 +111,17 @@ export default function TeacherNotes() {
     const className = String(lecture.class_level || lecture.course_title || "").toLowerCase();
     const subjectName = String(lecture.subject_name || "").toLowerCase();
 
-    return students.filter(
-      (student) =>
-        String(student.course_title || "").toLowerCase() === className &&
-        String(student.subject_name || "").toLowerCase() === subjectName
-    );
+    return students.filter((student) => {
+      // IDs are authoritative. Display names remain a fallback for older API
+      // responses so cached development bundles keep working after this update.
+      const courseMatches = lecture.course_id && student.course_id
+        ? String(student.course_id) === String(lecture.course_id)
+        : String(student.course_title || "").toLowerCase() === className;
+      const subjectMatches = lecture.subject_id && student.subject_id
+        ? String(student.subject_id) === String(lecture.subject_id)
+        : String(student.subject_name || "").toLowerCase() === subjectName;
+      return courseMatches && subjectMatches;
+    });
   }, [form?.lectureId, lectures, students]);
 
   const displayedNotes = useMemo(() => groupNoteRecipients(notes), [notes]);
@@ -288,7 +292,7 @@ export default function TeacherNotes() {
     }
   }
 
-  if (loading) return <DashboardSkeleton message="Opening notes and conversations..." />;
+  if (loading) return <DashboardSkeleton message="Opening teacher notes..." />;
 
   return (
     <>
@@ -307,31 +311,16 @@ export default function TeacherNotes() {
           <View style={styles.headingCopy}>
             <AppText variant="display">Notes</AppText>
             <AppText style={styles.subtitle}>
-              Student observations and learning conversations.
+              Private observations and class-wide teacher notes.
             </AppText>
           </View>
           <Pressable
-            accessibilityLabel={tab === "notes" ? "Create note" : "Start conversation"}
-            onPress={tab === "notes" ? newNote : newThread}
+            accessibilityLabel="Create note"
+            onPress={newNote}
             style={styles.add}
           >
             <Ionicons color={colors.white} name="add" size={24} />
           </Pressable>
-        </View>
-
-        <View style={styles.tabs}>
-          <Tab
-            active={tab === "notes"}
-            count={notes.length}
-            label="Private Notes"
-            onPress={() => setTab("notes")}
-          />
-          <Tab
-            active={tab === "threads"}
-            count={threads.length}
-            label="Conversations"
-            onPress={() => setTab("threads")}
-          />
         </View>
 
         {error ? (
@@ -344,34 +333,26 @@ export default function TeacherNotes() {
         ) : null}
 
         <View style={styles.list}>
-          {tab === "notes" ? (
-            displayedNotes.length ? (
-              displayedNotes.map((item) => (
-                <NoteCard
-                  item={item}
-                  key={item.ids.join("-")}
-                  onPress={() =>
-                    setForm({
-                      kind: "note",
-                      id: item.id,
-                      ids: item.ids,
-                      note: item.note || "",
-                      visibility: ["teacher_only", "student", "parent"].includes(item.visibility)
-                        ? item.visibility
-                        : "teacher_only",
-                    })
-                  }
-                />
-              ))
-            ) : (
-              <Empty icon="document-text-outline" text="No notes have been created yet." />
-            )
-          ) : threads.length ? (
-            threads.map((item) => (
-              <ThreadCard item={item} key={item.id} onPress={() => openThread(item)} />
+          {displayedNotes.length ? (
+            displayedNotes.map((item) => (
+              <NoteCard
+                item={item}
+                key={item.ids.join("-")}
+                onPress={() =>
+                  setForm({
+                    kind: "note",
+                    id: item.id,
+                    ids: item.ids,
+                    note: item.note || "",
+                    visibility: ["teacher_only", "student", "parent"].includes(item.visibility)
+                      ? item.visibility
+                      : "teacher_only",
+                  })
+                }
+              />
             ))
           ) : (
-            <Empty icon="chatbubbles-outline" text="No learning conversations have started yet." />
+            <Empty icon="document-text-outline" text="No notes have been created yet." />
           )}
         </View>
       </Screen>
@@ -383,21 +364,10 @@ export default function TeacherNotes() {
         onChange={setForm}
         onClose={() => setForm(null)}
         onDelete={removeNote}
-        onSave={form?.kind === "note" ? saveNote : createThread}
+        onSave={saveNote}
         saving={saving}
       />
 
-      <Conversation
-        currentUserId={user?.id}
-        item={thread}
-        loading={threadLoading}
-        messages={messages}
-        onClose={() => setThread(null)}
-        onReply={setReply}
-        onSend={sendReply}
-        reply={reply}
-        saving={saving}
-      />
     </>
   );
 }
@@ -428,7 +398,7 @@ function NoteCard({ item, onPress }) {
       <View style={styles.cardBody}>
         <View style={styles.cardLine}>
           <AppText style={styles.cardTitle}>
-            {ownerOnly ? "Only Me" : item.student_name || "Student note"}
+            {ownerOnly ? "Only Me" : "Class Note"}
           </AppText>
           <AppText style={styles.date}>{dateTime(item.created_at)}</AppText>
         </View>
@@ -538,7 +508,7 @@ function Editor({ eligibleStudents, form, lectures, onChange, onClose, onDelete,
           <View style={styles.sheet}>
             <SheetHeader
               onClose={onClose}
-              title={isNote ? (editing ? "Edit Student Note" : "New Student Note") : "Start Conversation"}
+              title={isNote ? (editing ? "Edit Note" : "New Class Note") : "Start Conversation"}
             />
 
             <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
@@ -569,8 +539,8 @@ function Editor({ eligibleStudents, form, lectures, onChange, onClose, onDelete,
                       onChange({
                         ...form,
                         visibility: value,
-                        studentId: value === "teacher_only" ? "" : form.studentId,
-                        targetAll: value === "teacher_only" ? false : form.targetAll,
+                        studentId: "",
+                        targetAll: value !== "teacher_only",
                       })
                     }
                   />
@@ -578,24 +548,11 @@ function Editor({ eligibleStudents, form, lectures, onChange, onClose, onDelete,
               </View>
 
               {isNote && !editing && form?.lectureId && form.visibility !== "teacher_only" ? (
-                <>
-                  <Label>Recipients</Label>
-                  <DropdownField
-                    disabled={!eligibleStudents.length}
-                    label="Select recipients"
-                    onPress={() => setDropdown("recipients")}
-                    value={form.targetAll ? `All Students (${eligibleStudents.length})` : selectedStudentLabel}
-                  />
-                  {!eligibleStudents.length ? (
-                    <AppText style={styles.hint}>No active students match this lecture assignment.</AppText>
-                  ) : (
-                    <AppText style={styles.hintNeutral}>
-                      {form.visibility === "parent"
-                        ? "The note will be shared with the selected students' parents."
-                        : "Choose one learner or the entire class."}
-                    </AppText>
-                  )}
-                </>
+                <AppText style={styles.hintNeutral}>
+                  {form.visibility === "parent"
+                    ? `This note will be shared with the parents of all ${eligibleStudents.length} students in the class.`
+                    : `This note will be shared with all ${eligibleStudents.length} students in the class.`}
+                </AppText>
               ) : null}
 
               {!isNote && !editing && form?.lectureId ? (

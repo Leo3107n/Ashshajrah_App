@@ -12,14 +12,16 @@ import ChildSelectionState from "./components/ChildSelectionState";
 import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
 
-const STATUS_FILTERS = ["all", "present", "leave", "partial", "absent"];
+const STATUS_FILTERS = ["all", "present", "leave", "absent"];
 const normalized = (value) => String(value || "").trim().toLowerCase();
 const readable = (value) => String(value || "").replace(/[_-]+/g, " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+const attendanceStatus = (value) =>
+  ["partial", "partial_present"].includes(normalized(value)) ? "present" : normalized(value || "absent");
 
 function tone(value) {
-  const status = normalized(value);
+  const status = attendanceStatus(value);
   if (status === "present") return "success";
-  if (["leave", "partial"].includes(status)) return "warning";
+  if (status === "leave") return "warning";
   if (status === "absent") return "danger";
   return "neutral";
 }
@@ -74,7 +76,7 @@ export default function ParentAttendance() {
         :
       data.items.filter(
         (item) =>
-          (status === "all" || normalized(item.attendance_status || item.status) === status)
+          (status === "all" || attendanceStatus(item.attendance_status || item.status) === status)
       ),
     [data.items, requiresChildSelection, status]
   );
@@ -85,7 +87,7 @@ export default function ParentAttendance() {
   return (
     <Screen
       contentContainerStyle={styles.content}
-      refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => { setChildId(""); if (!childId) load({ refresh: true }); }} refreshing={refreshing} tintColor={colors.gold} />}
+      refreshControl={<RefreshControl colors={[colors.gold]} onRefresh={() => load({ refresh: true })} refreshing={refreshing} tintColor={colors.gold} />}
     >
       <View style={styles.heading}>
         <AppText style={styles.eyebrow}>YOUR CHILDREN</AppText>
@@ -158,14 +160,14 @@ export default function ParentAttendance() {
 }
 
 function AttendanceRow({ item }) {
-  const status = item.attendance_status || item.status;
+  const status = attendanceStatus(item.attendance_status || item.status);
   const statusLabel = readable(status || "absent");
   return (
     <View style={styles.row}>
-      <View style={[styles.rowIcon, normalized(status) === "absent" && styles.rowIconAbsent]}>
+      <View style={[styles.rowIcon, status === "absent" && styles.rowIconAbsent]}>
         <Ionicons
-          color={normalized(status) === "absent" ? colors.error : colors.secondary}
-          name={normalized(status) === "absent" ? "close-outline" : normalized(status) === "leave" ? "calendar-outline" : "checkmark-outline"}
+          color={status === "absent" ? colors.error : colors.secondary}
+          name={status === "absent" ? "close-outline" : status === "leave" ? "calendar-outline" : "checkmark-outline"}
           size={21}
         />
       </View>
@@ -173,7 +175,7 @@ function AttendanceRow({ item }) {
         <AppText style={styles.rowTitle}>{item.subject_name || item.title}</AppText>
         {item.student_name ? <AppText style={styles.childName}>{item.student_name}</AppText> : null}
         <AppText style={styles.rowMeta}>{item.title || "Scheduled class"}</AppText>
-        <AppText style={[styles.rowStatus, styles[`rowStatus_${normalized(status)}`]]}>
+        <AppText style={[styles.rowStatus, styles[`rowStatus_${status}`]]}>
           Class Status: {statusLabel}
         </AppText>
         <AppText style={styles.rowDate}>{dateTime(item.scheduled_start)}</AppText>
@@ -235,7 +237,6 @@ const styles = StyleSheet.create({
   rowMeta: { color: colors.onSurfaceVariant, fontSize: 9 },
   rowStatus: { marginTop: 3, fontFamily: fonts.bodyBold, fontSize: 9 },
   rowStatus_present: { color: colors.secondary },
-  rowStatus_partial: { color: colors.goldDark },
   rowStatus_leave: { color: colors.goldDark },
   rowStatus_absent: { color: colors.error },
   rowDate: { marginTop: 3, color: colors.outline, fontSize: 9 },

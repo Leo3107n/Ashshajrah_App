@@ -402,7 +402,7 @@ function SubjectSheet({ details, onClose, selected }) {
 
             <DetailHeading title="Homework" />
             {details?.homework.length ? (
-              details.homework.slice(0, 4).map((item) => (
+              details.homework.map((item) => (
                 <View key={item.id} style={styles.detailRow}>
                   <View style={styles.detailRowIcon}>
                     <Ionicons color={colors.secondary} name="document-text-outline" size={18} />

@@ -22,6 +22,7 @@ import ChildDropdown from "./components/ChildDropdown";
 import ChildSelectionState from "./components/ChildSelectionState";
 import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, space } from "../../theme";
+import { buildCalendarMarks } from "../../utils/calendarSelection";
 
 const PERIODS = [
   ["selected_date", "Day"],
@@ -125,18 +126,16 @@ export default function ParentCalendar() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
+  const [eventError, setEventError] = useState("");
 
   const load = useCallback(async ({ refresh = false } = {}) => {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
+    setEventError("");
     try {
-      const [response, internalEventResponse, publicEventResponse] = await Promise.all([
-        api.parent.classes({
-          range: period,
-          date: selectedDate,
-          childId: childFilter || undefined,
-          subjectId: subjectId || undefined,
-        }),
+      // Events are supplementary calendar content. Keep their requests
+      // isolated so an Events API failure never hides a valid class schedule.
+      const eventsRequest = Promise.allSettled([
         api.parent.calendarEvents({
           range: period,
           date: selectedDate,
@@ -148,14 +147,36 @@ export default function ParentCalendar() {
           type: "public",
         }),
       ]);
+      const response = await api.parent.classes({
+          range: period,
+          date: selectedDate,
+          childId: childFilter || undefined,
+          subjectId: subjectId || undefined,
+        });
       setData({
         items: response?.items || [],
         children: response?.children || [],
         subjects: response?.subjects || [],
         markedDates: response?.markedDates || [],
       });
-      setInternalEvents(uniqueEvents(internalEventResponse?.items));
-      setPublicEvents(uniqueEvents(publicEventResponse?.items));
+
+      // Show the class schedule as soon as it is available. Event requests can
+      // finish independently without holding the main Calendar loader open.
+      setLoading(false);
+      const [internalResult, publicResult] = await eventsRequest;
+      setInternalEvents(
+        internalResult.status === "fulfilled"
+          ? uniqueEvents(internalResult.value?.items)
+          : []
+      );
+      setPublicEvents(
+        publicResult.status === "fulfilled"
+          ? uniqueEvents(publicResult.value?.items)
+          : []
+      );
+      if (internalResult.status === "rejected" || publicResult.status === "rejected") {
+        setEventError("Some events could not be loaded. Pull down to try again.");
+      }
     } catch (nextError) {
       setError(nextError?.message || "Unable to load the class calendar.");
     } finally {
@@ -172,17 +193,11 @@ export default function ParentCalendar() {
 
   const requiresChildSelection = data.children.length > 1 && !childFilter;
 
-  const marks = Object.fromEntries(
-    (data.markedDates || []).map((item) => [
-      item.date || item,
-      { marked: true, dotColor: colors.gold },
-    ])
-  );
-  marks[selectedDate] = {
-    ...(marks[selectedDate] || {}),
-    selected: true,
-    selectedColor: colors.primaryContainer,
-  };
+  const marks = buildCalendarMarks(data.markedDates, selectedDate, period, {
+    dotColor: colors.gold,
+    selectionColor: colors.primaryContainer,
+    selectedTextColor: colors.white,
+  });
 
   if (loading && !data.children.length) {
     return <DashboardSkeleton message="Loading the class calendar..." />;
@@ -195,10 +210,7 @@ export default function ParentCalendar() {
         refreshControl={
           <RefreshControl
             colors={[colors.gold]}
-            onRefresh={() => {
-              setChildFilter("");
-              if (!childFilter) load({ refresh: true });
-            }}
+            onRefresh={() => load({ refresh: true })}
             refreshing={refreshing}
             tintColor={colors.gold}
           />
@@ -257,7 +269,12 @@ export default function ParentCalendar() {
           <ChildDropdown
             children={data.children}
             label="SELECT CHILD"
-            onChange={setChildFilter}
+            onChange={(nextChildId) => {
+              // A subject from the previous child may not belong to the newly
+              // selected child and would otherwise produce an empty schedule.
+              setSubjectId("");
+              setChildFilter(nextChildId);
+            }}
             placeholder="Choose a child to view class schedule"
             selectedId={childFilter}
           />
@@ -296,7 +313,7 @@ export default function ParentCalendar() {
 
         <EventSection
           activeType={eventType}
-          error={error}
+          error={eventError}
           internalEvents={internalEvents}
           onChangeType={setEventType}
           period={period}

@@ -6,14 +6,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Image,
   Linking,
   Modal,
   Pressable,
   RefreshControl,
   ScrollView,
   StyleSheet,
+  useWindowDimensions,
   View,
 } from "react-native";
 import api from "../../api";
@@ -34,6 +36,7 @@ import {
   shadows,
   space,
 } from "../../theme";
+import { WebView } from "react-native-webview";
 
 function firstName(user) {
   return String(user?.name || user?.full_name || "Student")
@@ -91,21 +94,9 @@ function feeStatusLabel(stats, monthlyFee) {
   return stats?.fee_status_label || "Not Paid";
 }
 
-function planTone(value) {
-  const status = String(value || "").toLowerCase();
-  if (status === "active") return "success";
-  if (status === "upcoming") return "warning";
-  return "neutral";
-}
-
 function pickDashboardPlan(plans) {
   const items = Array.isArray(plans) ? plans : [];
-  return (
-    items.find((item) => String(item.status).toLowerCase() === "active") ||
-    items.find((item) => String(item.status).toLowerCase() === "upcoming") ||
-    items[0] ||
-    null
-  );
+  return items.find((item) => String(item.status).toLowerCase() === "active") || null;
 }
 
 function isOtherEducationalDocument(item) {
@@ -117,6 +108,7 @@ function isOtherEducationalDocument(item) {
 }
 
 export default function StudentHome() {
+  const { height: viewportHeight } = useWindowDimensions();
   const router = useRouter();
   const { isAuthenticating, logout, user } = useAuth();
   const [data, setData] = useState({
@@ -131,6 +123,8 @@ export default function StudentHome() {
     monthlyFee: null,
   });
   const [loading, setLoading] = useState(true);
+  const [planFrame, setPlanFrame] = useState({ y: 0, height: 0 });
+  const [planVisible, setPlanVisible] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
@@ -148,7 +142,7 @@ export default function StudentHome() {
         api.student.dashboard(),
         api.student.calendarLectures({ range: "today" }),
         api.payment.monthlyFeeStatus(),
-        api.shared.monthlyPlans({ status: "all" }),
+        api.shared.monthlyPlans({ status: "active" }),
       ]);
 
       setData({
@@ -187,6 +181,14 @@ export default function StudentHome() {
   const isPortalLocked = Boolean(lockMessage);
   const feeNoticeMessage = pendingFeeMessage(data.monthlyFee);
   const dashboardPlan = useMemo(() => pickDashboardPlan(data.monthlyPlans), [data.monthlyPlans]);
+
+  const handleDashboardScroll = useCallback((event) => {
+    if (!planFrame.height) return;
+    const scrollY = event.nativeEvent.contentOffset.y;
+    const visible = scrollY < planFrame.y + planFrame.height
+      && scrollY + viewportHeight > planFrame.y;
+    setPlanVisible((current) => current === visible ? current : visible);
+  }, [planFrame, viewportHeight]);
 
   const tiles = [
     {
@@ -247,6 +249,8 @@ export default function StudentHome() {
   return (
     <Screen
       contentContainerStyle={styles.content}
+      onScroll={handleDashboardScroll}
+      scrollEventThrottle={100}
       refreshControl={
         <RefreshControl
           colors={[colors.gold]}
@@ -304,7 +308,7 @@ export default function StudentHome() {
       {!isPortalLocked && feeNoticeMessage ? (
         <SurfaceCard style={styles.feeNoticeBanner}>
           <View style={styles.feeNoticeIcon}>
-            <Ionicons color="#2563EB" name="calendar-outline" size={22} />
+            <Ionicons color="#A87900" name="calendar-outline" size={22} />
           </View>
           <View style={styles.lockCopy}>
             <AppText style={styles.feeNoticeEyebrow}>FEE DEADLINE</AppText>
@@ -317,10 +321,14 @@ export default function StudentHome() {
         <>
 
       <SectionHeader title="Monthly Plan" />
-      <MonthlyPlanPreview
-        item={dashboardPlan}
-        onPress={() => go("monthly-plans")}
-      />
+      <View
+        onLayout={(event) => setPlanFrame(event.nativeEvent.layout)}
+      >
+        <MonthlyPlanPreview
+          isVisible={planVisible}
+          item={dashboardPlan}
+        />
+      </View>
 
       <SectionHeader title="Announcements" />
       <View style={styles.stack}>
@@ -567,59 +575,300 @@ function EducationalDocuments({ classDocuments: classBucket, documents, otherDoc
   );
 }
 
-function MonthlyPlanPreview({ item, onPress }) {
-  const mediaCount = Array.isArray(item?.media)
-    ? item.media.length
-    : Array.isArray(item?.image_urls)
-      ? item.image_urls.length
-      : 0;
+function MonthlyPlanPreview({ isVisible = true, item }) {
+  const { width } = useWindowDimensions();
+  const carouselRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [viewerIndex, setViewerIndex] = useState(null);
+  const media = Array.isArray(item?.media) ? item.media : [];
+  const slideWidth = Math.max(260, Math.min(width - space.xl * 2 - space.md * 2, 340));
+  const slideHeight = Math.round(slideWidth * 1.25);
+  const pageSize = slideWidth + space.sm;
+
+  function moveSlide(direction) {
+    if (!media.length) return;
+    const nextIndex = Math.max(0, Math.min(media.length - 1, activeIndex + direction));
+    setActiveIndex(nextIndex);
+    carouselRef.current?.scrollTo({ x: nextIndex * pageSize, animated: true });
+  }
 
   if (!item) {
     return (
       <SurfaceCard style={styles.planPreview}>
-        <View style={styles.planPreviewTop}>
-          <View style={styles.planIcon}>
-            <Ionicons color={colors.secondary} name="calendar-number-outline" size={22} />
-          </View>
-          <View style={styles.planCopy}>
-            <AppText style={styles.planTitle}>No monthly plan yet</AppText>
-            <AppText style={styles.planDate}>
-              Plans uploaded by the academy will appear here.
-            </AppText>
-          </View>
-        </View>
+        <AppText style={styles.noPlanText}>No active monthly plan yet.</AppText>
       </SurfaceCard>
     );
   }
 
   return (
-    <Pressable onPress={onPress}>
-      <SurfaceCard style={styles.planPreview}>
-        <View style={styles.planPreviewTop}>
-          <View style={styles.planIcon}>
-            <Ionicons color={colors.secondary} name="calendar-number-outline" size={22} />
-          </View>
-          <View style={styles.planCopy}>
-            <AppText style={styles.planEyebrow}>STUDY MONTHLY PLAN</AppText>
-            <AppText style={styles.planTitle}>{item.name || "Monthly Plan"}</AppText>
-            <AppText style={styles.planDate}>
-              {dateLabel(item.start_date) || "Not set"} to {dateLabel(item.end_date) || "Not set"}
-            </AppText>
-          </View>
-          <StatusChip tone={planTone(item.status)}>{readable(item.status)}</StatusChip>
-        </View>
-        <View style={styles.planMetaRow}>
-          <View style={styles.planMeta}>
-            <Ionicons color={colors.primary} name="attach-outline" size={16} />
-            <AppText style={styles.planMetaText}>{mediaCount} resources</AppText>
-          </View>
-        </View>
-        <View style={styles.planFooter}>
-          <AppText style={styles.planFooterText}>Tap to view images, videos, and all plans in the app</AppText>
-          <Ionicons color={colors.secondary} name="arrow-forward-outline" size={17} />
-        </View>
-      </SurfaceCard>
+    <SurfaceCard style={styles.planPreviewMediaOnly}>
+        {media.length ? (
+          <ScrollView
+            ref={carouselRef}
+            contentContainerStyle={styles.planSlideshowMediaOnly}
+            horizontal
+            pagingEnabled
+            snapToAlignment="center"
+            snapToInterval={pageSize}
+            decelerationRate="fast"
+            onMomentumScrollEnd={(event) => {
+              const nextIndex = Math.round(event.nativeEvent.contentOffset.x / pageSize);
+              setActiveIndex(Math.max(0, Math.min(media.length - 1, nextIndex)));
+            }}
+            showsHorizontalScrollIndicator={false}
+          >
+            {media.map((asset, index) => (
+              <Pressable
+                key={`${asset.path || asset.url || index}`}
+                onPress={() => setViewerIndex(index)}
+                style={[styles.planSlide, { width: slideWidth, height: slideHeight }]}
+              >
+                {asset.type === "image" && asset.url ? (
+                  <Image resizeMode="cover" source={{ uri: asset.url }} style={styles.planSlideImage} />
+                ) : asset.type === "video" && asset.url && index === activeIndex && isVisible ? (
+                  <DashboardPlanVideo asset={asset} />
+                ) : (
+                  <View style={styles.planSlideVideo}>
+                    <Ionicons color={colors.secondary} name="videocam-outline" size={26} />
+                    <AppText style={styles.planSlideText}>Video {index + 1}</AppText>
+                  </View>
+                )}
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+        {media.length > 1 ? (
+          <>
+            <CarouselArrow
+              disabled={activeIndex === 0}
+              direction="left"
+              onPress={() => moveSlide(-1)}
+            />
+            <CarouselArrow
+              disabled={activeIndex === media.length - 1}
+              direction="right"
+              onPress={() => moveSlide(1)}
+            />
+          </>
+        ) : null}
+        <DashboardMediaViewer
+          initialIndex={viewerIndex || 0}
+          media={media}
+          onClose={() => setViewerIndex(null)}
+          visible={viewerIndex !== null}
+        />
+    </SurfaceCard>
+  );
+}
+
+function CarouselArrow({ direction, disabled, onPress }) {
+  const isLeft = direction === "left";
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.carouselArrow,
+        isLeft ? styles.carouselArrowLeft : styles.carouselArrowRight,
+        disabled && styles.carouselArrowDisabled,
+      ]}
+    >
+      <Ionicons color={colors.white} name={isLeft ? "chevron-back" : "chevron-forward"} size={24} />
     </Pressable>
+  );
+}
+
+function DashboardPlanVideo({ asset }) {
+  const escapedUrl = String(asset?.url || "").replace(/"/g, "&quot;");
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #003B2D;
+            overflow: hidden;
+          }
+          video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            background: #003B2D;
+          }
+        </style>
+      </head>
+      <body>
+        <video autoplay controls loop playsinline preload="auto" src="${escapedUrl}"></video>
+      </body>
+    </html>
+  `;
+
+  return (
+    <WebView
+      allowsInlineMediaPlayback
+      javaScriptEnabled
+      mediaPlaybackRequiresUserAction={false}
+      originWhitelist={["*"]}
+      scrollEnabled={false}
+      source={{ html }}
+      style={styles.planSlideWebVideo}
+    />
+  );
+}
+
+function DashboardMediaViewer({ initialIndex = 0, media, onClose, visible }) {
+  const { width } = useWindowDimensions();
+  const viewerRef = useRef(null);
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
+
+  useEffect(() => {
+    if (visible) {
+      setActiveIndex(initialIndex);
+      requestAnimationFrame(() => {
+        viewerRef.current?.scrollTo({ x: width * initialIndex, animated: false });
+      });
+    }
+  }, [initialIndex, visible]);
+
+  function moveFullscreen(direction) {
+    if (!media.length) return;
+    const nextIndex = Math.max(0, Math.min(media.length - 1, activeIndex + direction));
+    setActiveIndex(nextIndex);
+    viewerRef.current?.scrollTo({ x: width * nextIndex, animated: true });
+  }
+
+  if (!visible) return null;
+
+  return (
+    <Modal animationType="fade" onRequestClose={onClose} visible={visible}>
+      <View style={styles.fullscreenViewer}>
+        <View style={styles.fullscreenHeader}>
+          <AppText style={styles.fullscreenCounter}>
+            {activeIndex + 1} / {media.length}
+          </AppText>
+          <Pressable onPress={onClose} style={styles.fullscreenClose}>
+            <Ionicons color={colors.white} name="close" size={26} />
+          </Pressable>
+        </View>
+        <ScrollView
+          ref={viewerRef}
+          contentOffset={{ x: width * initialIndex, y: 0 }}
+          horizontal
+          onMomentumScrollEnd={(event) => {
+            const nextIndex = Math.round(event.nativeEvent.contentOffset.x / width);
+            setActiveIndex(Math.max(0, Math.min(media.length - 1, nextIndex)));
+          }}
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          style={styles.fullscreenScroller}
+        >
+          {media.map((asset, index) => (
+            <View key={`${asset.path || asset.url || index}-fullscreen`} style={[styles.fullscreenSlide, { width }]}>
+              <FullscreenMedia active={activeIndex === index} asset={asset} index={index} />
+            </View>
+          ))}
+        </ScrollView>
+        {media.length > 1 ? (
+          <>
+            <FullscreenArrow
+              disabled={activeIndex === 0}
+              direction="left"
+              onPress={() => moveFullscreen(-1)}
+            />
+            <FullscreenArrow
+              disabled={activeIndex === media.length - 1}
+              direction="right"
+              onPress={() => moveFullscreen(1)}
+            />
+          </>
+        ) : null}
+      </View>
+    </Modal>
+  );
+}
+
+function FullscreenArrow({ direction, disabled, onPress }) {
+  const isLeft = direction === "left";
+  return (
+    <Pressable
+      disabled={disabled}
+      onPress={onPress}
+      style={[
+        styles.fullscreenArrow,
+        isLeft ? styles.fullscreenArrowLeft : styles.fullscreenArrowRight,
+        disabled && styles.carouselArrowDisabled,
+      ]}
+    >
+      <Ionicons color={colors.white} name={isLeft ? "chevron-back" : "chevron-forward"} size={30} />
+    </Pressable>
+  );
+}
+
+function FullscreenMedia({ active, asset, index }) {
+  if (asset?.type === "video") {
+    return active ? (
+      <FullscreenVideo asset={asset} />
+    ) : (
+      <View style={styles.fullscreenUnavailable}>
+        <Ionicons color={colors.white} name="videocam-outline" size={42} />
+        <AppText style={styles.fullscreenUnavailableText}>Video {index + 1}</AppText>
+      </View>
+    );
+  }
+  return asset?.url ? (
+    <Image resizeMode="contain" source={{ uri: asset.url }} style={styles.fullscreenImage} />
+  ) : (
+    <View style={styles.fullscreenUnavailable}>
+      <Ionicons color={colors.white} name="cloud-offline-outline" size={36} />
+      <AppText style={styles.fullscreenUnavailableText}>Media unavailable</AppText>
+    </View>
+  );
+}
+
+function FullscreenVideo({ asset }) {
+  if (!asset?.url) return <FullscreenMedia asset={{ type: "image", url: "" }} />;
+  const escapedUrl = String(asset.url).replace(/"/g, "&quot;");
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          html, body {
+            margin: 0;
+            width: 100%;
+            height: 100%;
+            background: #000;
+            overflow: hidden;
+          }
+          video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background: #000;
+          }
+        </style>
+      </head>
+      <body>
+        <video autoplay controls playsinline preload="auto" src="${escapedUrl}"></video>
+      </body>
+    </html>
+  `;
+
+  return (
+    <WebView
+      allowsFullscreenVideo
+      allowsInlineMediaPlayback
+      javaScriptEnabled
+      mediaPlaybackRequiresUserAction={false}
+      originWhitelist={["*"]}
+      source={{ html }}
+      style={styles.fullscreenVideo}
+    />
   );
 }
 
@@ -710,8 +959,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     marginTop: space.md,
     borderWidth: 1,
-    borderColor: "#2563EB",
-    backgroundColor: "#DBEAFE",
+    borderColor: "#D6A700",
+    backgroundColor: "#FFF4CC",
   },
   feeNoticeIcon: {
     width: 44,
@@ -722,14 +971,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   feeNoticeEyebrow: {
-    color: "#1D4ED8",
+    color: "#7A5700",
     fontFamily: fonts.bodyBold,
     fontSize: 10,
     letterSpacing: 1.1,
   },
   feeNoticeText: {
     marginTop: space.xs,
-    color: "#1E3A8A",
+    color: "#6B4E00",
     fontFamily: fonts.bodySemibold,
     fontSize: fontSize.sm,
     lineHeight: 20,
@@ -787,8 +1036,70 @@ const styles = StyleSheet.create({
   planMetaRow: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
   planMeta: { flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, paddingVertical: 7, borderRadius: radius.full, backgroundColor: colors.surfaceLow },
   planMetaText: { marginLeft: space.xs, color: colors.primary, fontFamily: fonts.bodySemibold, fontSize: fontSize.xs },
+  planSlideshow: { gap: space.sm, paddingVertical: space.md },
+  planSlide: { overflow: "hidden", borderRadius: radius.lg, backgroundColor: colors.goldPale },
+  planSlideImage: { width: "100%", height: "100%" },
+  planSlideWebVideo: { width: "100%", height: "100%", backgroundColor: colors.primary },
+  planSlideVideo: { flex: 1, alignItems: "center", justifyContent: "center" },
+  planSlideText: { marginTop: 4, color: colors.secondary, fontFamily: fonts.bodyBold, fontSize: 10 },
   planFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: space.sm, borderTopWidth: 1, borderTopColor: colors.borderGreen },
   planFooterText: { flex: 1, color: colors.onSurfaceVariant, fontSize: fontSize.xs },
+  planPreviewMediaOnly: { padding: space.sm },
+  planSlideshowMediaOnly: { gap: space.sm },
+  carouselArrow: {
+    position: "absolute",
+    top: "46%",
+    zIndex: 5,
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 20,
+    backgroundColor: "rgba(0, 59, 45, 0.72)",
+  },
+  carouselArrowLeft: { left: space.md },
+  carouselArrowRight: { right: space.md },
+  carouselArrowDisabled: { opacity: 0.3 },
+  fullscreenViewer: { flex: 1, backgroundColor: "#000" },
+  fullscreenHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: space.lg,
+    paddingTop: space["3xl"],
+    paddingBottom: space.sm,
+    backgroundColor: "rgba(0,0,0,0.45)",
+  },
+  fullscreenCounter: { color: colors.white, fontFamily: fonts.bodyBold, fontSize: fontSize.xs },
+  fullscreenClose: { width: 42, height: 42, alignItems: "center", justifyContent: "center", borderRadius: 21, backgroundColor: "rgba(255,255,255,0.14)" },
+  fullscreenScroller: { flex: 1 },
+  fullscreenSlide: { flex: 1, alignItems: "center", justifyContent: "center" },
+  fullscreenImage: { width: "100%", height: "100%" },
+  fullscreenVideo: { width: "100%", height: "100%", backgroundColor: "#000" },
+  fullscreenUnavailable: { alignItems: "center", justifyContent: "center", padding: space.xl },
+  fullscreenUnavailableText: { marginTop: space.sm, color: colors.white, fontFamily: fonts.bodyBold },
+  fullscreenArrow: {
+    position: "absolute",
+    top: "48%",
+    zIndex: 50,
+    elevation: 50,
+    width: 54,
+    height: 54,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 27,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.36)",
+    backgroundColor: "rgba(0,0,0,0.62)",
+  },
+  fullscreenArrowLeft: { left: space.md },
+  fullscreenArrowRight: { right: space.md },
+  noPlanText: { color: colors.onSurfaceVariant, fontSize: fontSize.xs, textAlign: "center" },
   sectionHeader: {
     flexDirection: "row",
     alignItems: "center",

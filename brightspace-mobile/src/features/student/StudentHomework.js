@@ -105,6 +105,7 @@ function isImageAttachment(item) {
 
 export default function StudentHomework() {
   const [items, setItems] = useState([]);
+  const [classSubjects, setClassSubjects] = useState([]);
   const [subject, setSubject] = useState("");
   const [subjectPickerOpen, setSubjectPickerOpen] = useState(false);
   const [filter, setFilter] = useState("all");
@@ -117,8 +118,26 @@ export default function StudentHomework() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const response = await api.student.homework.list();
-      setItems(response?.items || []);
+      const [homework, classes] = await Promise.all([
+        api.student.homework.list(),
+        api.student.classes(),
+      ]);
+      setItems(homework?.items || []);
+      const subjectMap = new Map();
+      (classes?.items || []).forEach((course) => {
+        (course.subjects || []).forEach((subjectItem) => {
+          const label = subjectItem.name || "General";
+          const key = normalized(label) || "general";
+          if (!subjectMap.has(key)) {
+            subjectMap.set(key, {
+              key,
+              label,
+              count: 0,
+            });
+          }
+        });
+      });
+      setClassSubjects(Array.from(subjectMap.values()));
     } catch (nextError) {
       setError(nextError?.message || "Unable to load homework.");
     } finally {
@@ -132,7 +151,7 @@ export default function StudentHomework() {
   }, [load]);
 
   const subjects = useMemo(() => {
-    const byKey = new Map();
+    const byKey = new Map(classSubjects.map((item) => [item.key, { ...item, count: 0 }]));
     items.forEach((item) => {
       const label = item.subject_name || "General";
       const key = normalized(label) || "general";
@@ -715,7 +734,7 @@ function SubjectPicker({ items, onClose, onSelect, selectedKey, visible }) {
                         {item.label}
                       </AppText>
                       <AppText style={[styles.pickerOptionCount, active && styles.pickerOptionTextActive]}>
-                        {item.count} homework
+                        {item.count} homework assigned
                       </AppText>
                     </View>
                     {active ? <Ionicons color={colors.white} name="checkmark-circle" size={20} /> : null}

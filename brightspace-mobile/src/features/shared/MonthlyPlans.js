@@ -22,7 +22,7 @@ const FILTERS = [
   ["all", "All"],
   ["active", "Active"],
   ["upcoming", "Upcoming"],
-  ["completed", "Completed"],
+  ["expired", "Expired"],
 ];
 
 function readable(value) {
@@ -40,7 +40,7 @@ function statusTone(value) {
   const status = String(value || "").toLowerCase();
   if (status === "active") return "success";
   if (status === "upcoming") return "warning";
-  if (status === "completed") return "neutral";
+  if (status === "expired") return "neutral";
   return "neutral";
 }
 
