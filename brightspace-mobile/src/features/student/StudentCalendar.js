@@ -48,7 +48,7 @@ export default function StudentCalendar() {
   const [data, setData] = useState({ items: [], subjects: [], markedDates: [] });
   const [internalEvents, setInternalEvents] = useState([]);
   const [publicEvents, setPublicEvents] = useState([]);
-  const [eventType, setEventType] = useState("internal");
+  const [eventType, setEventType] = useState("public");
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -65,12 +65,15 @@ export default function StudentCalendar() {
           subjectId: subjectId || undefined,
         }),
         api.student.calendarEvents({
-          range: period,
+          // Events are browsed for the displayed month independently of the
+          // Day/Week/Month lecture filter so upcoming and completed events do
+          // not disappear when a single lecture date is selected.
+          range: "selected_month",
           date: selectedDate,
           type: "internal",
         }),
         api.student.calendarEvents({
-          range: period,
+          range: "selected_month",
           date: selectedDate,
           type: "public",
         }),
@@ -175,7 +178,7 @@ export default function StudentCalendar() {
           error={error}
           internalEvents={internalEvents}
           onChangeType={setEventType}
-          period={period}
+          period="selected_month"
           publicEvents={publicEvents}
         />
       </Screen>

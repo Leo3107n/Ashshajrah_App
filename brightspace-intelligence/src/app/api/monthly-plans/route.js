@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireRole, roleGuardResponse } from "@/lib/roleGuard";
 import prisma from "@/lib/prisma";
-import { createSignedAdmissionDocumentUrl } from "@/lib/supabaseStorage";
+import { createPublicAdmissionDocumentUrl } from "@/lib/supabaseStorage";
 
 function json(message, status = 200, extra = {}) {
   return NextResponse.json({ message, ...extra }, { status });
@@ -24,20 +24,21 @@ function planStatus(startDate, endDate) {
   return "active";
 }
 
-async function signedMediaUrls(paths = []) {
-  const urls = [];
-  for (const path of paths) {
-    try {
-      urls.push({
-        path,
-        url: await createSignedAdmissionDocumentUrl(path, 3600),
-        type: String(path || "").toLowerCase().endsWith(".mp4") ? "video" : "image",
-      });
-    } catch {
-      urls.push({ path, url: "", type: "file" });
-    }
-  }
-  return urls;
+function mediaUrls(paths = []) {
+  return paths.map((path, index) => {
+    const value = String(path || "");
+    const embedded = value.startsWith("data:");
+    const video = embedded
+      ? value.toLowerCase().startsWith("data:video/")
+      : value.toLowerCase().endsWith(".mp4");
+
+    return {
+      // Avoid sending the large Base64 value twice in the API response.
+      path: embedded ? `embedded-media-${index + 1}` : path,
+      url: embedded ? value : createPublicAdmissionDocumentUrl(path),
+      type: video ? "video" : "image",
+    };
+  });
 }
 
 export async function GET(request) {
@@ -53,7 +54,24 @@ export async function GET(request) {
         name,
         start_date::text,
         end_date::text,
-        COALESCE(image_urls, ARRAY[]::text[]) AS image_urls,
+        COALESCE(
+          (
+            SELECT array_agg(media_path.path ORDER BY media_path.position)
+            FROM unnest(COALESCE(monthly_plans.image_urls, ARRAY[]::text[]))
+              WITH ORDINALITY AS media_path(path, position)
+            WHERE media_path.path LIKE 'data:image/%;base64,%'
+               OR media_path.path LIKE 'data:video/%;base64,%'
+               OR EXISTS (
+                 SELECT 1
+                 FROM storage.objects stored_media
+                 WHERE stored_media.bucket_id = split_part(media_path.path, '/', 1)
+                   AND stored_media.name = substring(
+                     media_path.path FROM position('/' IN media_path.path) + 1
+                   )
+               )
+          ),
+          ARRAY[]::text[]
+        ) AS image_urls,
         created_by::text,
         created_at::text,
         updated_at::text
@@ -67,7 +85,7 @@ export async function GET(request) {
         return {
           ...row,
           status,
-          media: await signedMediaUrls(row.image_urls || []),
+          media: mediaUrls(row.image_urls || []),
         };
       })
     );

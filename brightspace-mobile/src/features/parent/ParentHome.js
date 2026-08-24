@@ -21,6 +21,8 @@ import { useAuth } from "../../context/AuthContext";
 import ChildDropdown from "./components/ChildDropdown";
 import useParentChildSelection from "./useParentChildSelection";
 import { colors, fonts, fontSize, radius, shadows, space } from "../../theme";
+import { openEducationalDocument } from "../../utils/openDocument";
+import DashboardEvents, { orderDashboardEvents } from "../shared/DashboardEvents";
 import { WebView } from "react-native-webview";
 
 function firstName(user) {
@@ -141,6 +143,7 @@ export default function ParentHome() {
   const { user } = useAuth();
   const [data, setData] = useState({
     children: [],
+    events: [],
     headlines: [],
     monthlyPlans: [],
     monthlyPlanSummary: {},
@@ -178,14 +181,25 @@ export default function ParentHome() {
     refresh ? setRefreshing(true) : setLoading(true);
     setError("");
     try {
-      const [dashboard, notifications, monthlyPlans, monthlyFee] = await Promise.all([
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const [dashboard, notifications, monthlyPlans, monthlyFee, eventResults] = await Promise.all([
         api.parent.dashboard(),
-        api.shared.notifications.list({ limit: 5 }),
-        api.shared.monthlyPlans({ status: "active" }),
+        api.shared.notifications.list({ limit: 5 }).catch(() => ({ items: [], summary: {} })),
+        // Monthly Plan media is supplementary and must not take down the dashboard.
+        api.shared.monthlyPlans({ status: "active" }).catch(() => ({ items: [], summary: {} })),
         api.payment.monthlyFeeStatus(),
+        Promise.allSettled([
+          api.parent.calendarEvents({ range: "selected_month", date, type: "internal" }),
+          api.parent.calendarEvents({ range: "selected_month", date, type: "public" }),
+        ]),
       ]);
+      const events = eventResults.flatMap((result) =>
+        result.status === "fulfilled" ? result.value?.items || [] : []
+      );
       setData({
         children: uniqueChildren(dashboard?.children),
+        events: orderDashboardEvents(events),
         headlines: dashboard?.headlines || [],
         monthlyPlans: monthlyPlans?.items || [],
         monthlyPlanSummary: monthlyPlans?.summary || {},
@@ -267,6 +281,11 @@ export default function ParentHome() {
           </AppText>
         </SurfaceCard>
       ))}
+
+      <DashboardEvents
+        events={data.events}
+        onViewCalendar={() => router.push("/(app)/parent/calendar")}
+      />
 
       <SectionHeader title="Monthly Plan" />
       <View
@@ -529,7 +548,7 @@ function EducationalDocuments({ documents }) {
             <Pressable
               disabled={!item.url}
               key={item.key || item.label || item.path}
-              onPress={() => item.url && Linking.openURL(item.url)}
+              onPress={() => openEducationalDocument(item)}
               style={styles.documentRow}
             >
               <View style={styles.documentIcon}>

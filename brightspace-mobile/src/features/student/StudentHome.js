@@ -36,6 +36,8 @@ import {
   shadows,
   space,
 } from "../../theme";
+import { openEducationalDocument } from "../../utils/openDocument";
+import DashboardEvents, { orderDashboardEvents } from "../shared/DashboardEvents";
 import { WebView } from "react-native-webview";
 
 function firstName(user) {
@@ -115,6 +117,7 @@ export default function StudentHome() {
     stats: {},
     classDocuments: [],
     educationalDocuments: [],
+    events: [],
     headlines: [],
     lectures: [],
     monthlyPlans: [],
@@ -138,17 +141,29 @@ export default function StudentHome() {
     setError("");
 
     try {
-      const [dashboard, calendar, monthlyFee, monthlyPlans] = await Promise.all([
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+      const [dashboard, calendar, monthlyFee, monthlyPlans, eventResults] = await Promise.all([
         api.student.dashboard(),
         api.student.calendarLectures({ range: "today" }),
         api.payment.monthlyFeeStatus(),
-        api.shared.monthlyPlans({ status: "active" }),
+        // Monthly Plan media is supplementary and must not take down the dashboard.
+        api.shared.monthlyPlans({ status: "active" }).catch(() => ({ items: [], summary: {} })),
+        Promise.allSettled([
+          api.student.calendarEvents({ range: "selected_month", date, type: "internal" }),
+          api.student.calendarEvents({ range: "selected_month", date, type: "public" }),
+        ]),
       ]);
+
+      const events = eventResults.flatMap((result) =>
+        result.status === "fulfilled" ? result.value?.items || [] : []
+      );
 
       setData({
         stats: dashboard?.stats || {},
         classDocuments: dashboard?.class_documents || [],
         educationalDocuments: dashboard?.educational_documents || [],
+        events: orderDashboardEvents(events),
         headlines: dashboard?.headlines || [],
         lectures: calendar?.items || [],
         monthlyPlans: monthlyPlans?.items || [],
@@ -320,6 +335,8 @@ export default function StudentHome() {
       {isPortalLocked ? null : (
         <>
 
+      <DashboardEvents events={data.events} onViewCalendar={() => go("calendar")} />
+
       <SectionHeader title="Monthly Plan" />
       <View
         onLayout={(event) => setPlanFrame(event.nativeEvent.layout)}
@@ -458,7 +475,8 @@ function StatTile({ icon, label, onPress, tone, value }) {
 }
 
 function EducationalDocuments({ classDocuments: classBucket, documents, otherDocuments: otherBucket }) {
-  const [documentGroup, setDocumentGroup] = useState("class");
+  // Keep the document category unselected until the student chooses one.
+  const [documentGroup, setDocumentGroup] = useState("");
   const [selectorOpen, setSelectorOpen] = useState(false);
   const items = Array.isArray(documents) ? documents.filter((item) => item?.url || item?.path) : [];
   const fallbackClassDocuments = items.filter((item) => String(item?.class_level || "").trim());
@@ -496,13 +514,20 @@ function EducationalDocuments({ classDocuments: classBucket, documents, otherDoc
         <Ionicons color={colors.outline} name="chevron-down" size={18} />
       </Pressable>
 
-      {visibleItems.length ? (
+      {!activeGroup ? (
+        <View style={styles.noDocuments}>
+          <Ionicons color={colors.outline} name="chevron-down-circle-outline" size={17} />
+          <AppText style={styles.noDocumentsText}>
+            Choose Class Documents or Other Documents to view files.
+          </AppText>
+        </View>
+      ) : visibleItems.length ? (
         <View style={styles.documentList}>
           {visibleItems.map((item) => (
             <Pressable
               disabled={!item.url}
               key={item.key || item.label || item.path}
-              onPress={() => item.url && Linking.openURL(item.url)}
+              onPress={() => openEducationalDocument(item)}
               style={styles.documentRow}
             >
               <View style={styles.documentIcon}>

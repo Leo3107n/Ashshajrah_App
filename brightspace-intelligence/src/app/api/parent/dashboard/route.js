@@ -3,7 +3,7 @@ import { requireRole, roleGuardResponse } from "@/lib/roleGuard";
 import prisma from "@/lib/prisma";
 import { getActiveHeadlines } from "@/lib/headlines";
 import { buildParentStudentScope, getScopedParentChildren, normalizeChildId } from "@/lib/parentScope";
-import { createSignedAdmissionDocumentUrl } from "@/lib/supabaseStorage";
+import { createPublicAdmissionDocumentUrl } from "@/lib/supabaseStorage";
 
 const ALLOWED_ROLES = ["parent", "admin"];
 
@@ -143,7 +143,7 @@ async function classEducationalDocumentsFromRow(row) {
           url: /^https?:\/\//i.test(directUrl)
             ? directUrl
             : storedPath
-              ? await createSignedAdmissionDocumentUrl(storedPath).catch(() => "")
+              ? createPublicAdmissionDocumentUrl(storedPath)
               : "",
           source: "class",
         };

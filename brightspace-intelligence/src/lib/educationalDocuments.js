@@ -1,5 +1,5 @@
 import prisma from "@/lib/prisma";
-import { createSignedAdmissionDocumentUrl } from "@/lib/supabaseStorage";
+import { createPublicAdmissionDocumentUrl } from "@/lib/supabaseStorage";
 
 const CLASS_DOCUMENT_TABLES = [
   "class_documents",
@@ -165,7 +165,7 @@ export async function classEducationalDocumentsFromRow(row) {
           url: /^https?:\/\//i.test(directUrl)
             ? directUrl
             : storedPath
-              ? await createSignedAdmissionDocumentUrl(storedPath).catch(() => "")
+              ? createPublicAdmissionDocumentUrl(storedPath)
               : "",
           source: "class",
         };

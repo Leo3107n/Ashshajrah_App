@@ -120,7 +120,7 @@ export default function ParentCalendar() {
   const [data, setData] = useState({ items: [], children: [], subjects: [], markedDates: [] });
   const [internalEvents, setInternalEvents] = useState([]);
   const [publicEvents, setPublicEvents] = useState([]);
-  const [eventType, setEventType] = useState("internal");
+  const [eventType, setEventType] = useState("public");
   const [childFilter, setChildFilter] = useParentChildSelection(data.children);
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -137,12 +137,14 @@ export default function ParentCalendar() {
       // isolated so an Events API failure never hides a valid class schedule.
       const eventsRequest = Promise.allSettled([
         api.parent.calendarEvents({
-          range: period,
+          // Keep Events month-based so lecture Day/Week filters do not hide
+          // other upcoming or completed events in the displayed month.
+          range: "selected_month",
           date: selectedDate,
           type: "internal",
         }),
         api.parent.calendarEvents({
-          range: period,
+          range: "selected_month",
           date: selectedDate,
           type: "public",
         }),
@@ -316,7 +318,7 @@ export default function ParentCalendar() {
           error={eventError}
           internalEvents={internalEvents}
           onChangeType={setEventType}
-          period={period}
+          period="selected_month"
           publicEvents={publicEvents}
         />
       </Screen>

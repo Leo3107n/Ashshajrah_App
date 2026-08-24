@@ -244,6 +244,29 @@ export async function createSignedAdmissionDocumentUrl(storedPath, expiresIn = 3
   return `${url}/storage/v1/object/public/${signingBucket}/${objectPath}`;
 }
 
+/**
+ * Builds a key-free URL for media stored in a public Supabase bucket. This is
+ * useful while database and Storage credentials are managed independently:
+ * public Monthly Plan media can be served from its owning project without
+ * using the service-role key required by private uploads and signed files.
+ */
+export function createPublicAdmissionDocumentUrl(storedPath) {
+  if (!storedPath) return "";
+
+  const url = process.env.SUPABASE_PUBLIC_STORAGE_URL || getRequiredEnv("SUPABASE_URL");
+  // Public reads do not require (and must not depend on) a service-role key.
+  const bucket = process.env.SUPABASE_ADMISSION_DOCUMENTS_BUCKET || DEFAULT_ADMISSION_BUCKET;
+  const inferred = splitStoredPath(storedPath);
+  const publicBucket = inferred.bucket || bucket;
+  const objectPath = normalizeStoredPath(storedPath, publicBucket);
+  const encodedPath = objectPath
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${url}/storage/v1/object/public/${encodeURIComponent(publicBucket)}/${encodedPath}`;
+}
+
 export async function createSignedHomeworkSubmissionUrl(storedPath, expiresIn = 3600) {
   return createSignedAdmissionDocumentUrl(storedPath, expiresIn);
 }
