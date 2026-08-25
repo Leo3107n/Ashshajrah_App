@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.healingcodes.brightspace"
+      "bundleIdentifier": "com.ashshajrah.learninghub"
     },
     "android": {
       "adaptiveIcon": {
