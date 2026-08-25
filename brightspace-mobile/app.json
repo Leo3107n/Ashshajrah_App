@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "userInterfaceStyle": "light",
     "scheme": "brightspace",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-square.png",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -19,7 +19,7 @@
     "android": {
       "package": "com.ashshajrah.learninghub",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FCF9F2"
       }
     },
@@ -29,7 +29,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/icon.png",
+          "icon": "./assets/adaptive-icon.png",
           "color": "#063F32"
         }
       ],
