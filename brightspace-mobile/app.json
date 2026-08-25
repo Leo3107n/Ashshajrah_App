@@ -17,11 +17,12 @@
       "bundleIdentifier": "com.ashshajrah.learninghub"
     },
     "android": {
+      "package": "com.ashshajrah.learninghub",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#FCF9F2"
-      },
-      "package": "com.healingcodes.brightspace"
+      }
     },
     "plugins": [
       "expo-router",
